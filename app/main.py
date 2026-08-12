@@ -1,0 +1,24 @@
+"""FastAPI 入口：注册 API 路由、托管前端静态文件、启动时初始化数据库。"""
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+
+from app.api import router as api_router
+from app.database import init_db
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="BiliScope", lifespan=lifespan)
+app.include_router(api_router)
+app.mount("/", StaticFiles(directory=str(ROOT / "web"), html=True), name="web")
