@@ -126,7 +126,7 @@ def alert_read(alert_id: int) -> dict:
 
 
 @router.post("/monitor/run")
-def monitor_run() -> dict:
+def monitor_run(media_id: int | None = None) -> dict:
     if not get_cookies():
         raise HTTPException(status_code=401, detail="未登录，请先扫码登录")
     conn = get_conn()
@@ -134,7 +134,7 @@ def monitor_run() -> dict:
     try:
         from app.bilibili.client import BiliClient
         with BiliClient(cookies=get_cookies()) as client:
-            n_invalid = check_invalid(conn, client, limit=100)
+            n_invalid = check_invalid(conn, client, limit=100, media_id=media_id)
             n_updates = check_updates(conn, client, limit=20)
     finally:
         conn.close()

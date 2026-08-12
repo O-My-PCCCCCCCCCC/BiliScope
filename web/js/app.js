@@ -225,12 +225,16 @@ const Monitor = {
   emits: ['refresh'],
   template: `
     <h2>监测中心</h2>
-    <div style="margin-bottom:12px">
-      <el-button type="primary" @click="run" :loading="running">立即检测</el-button>
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <el-select v-model="selFolder" style="width:240px" placeholder="选择检测范围">
+        <el-option label="全部（历史+收藏）" :value="null"/>
+        <el-option v-for="f in folders" :key="f.media_id" :label="f.name + '（' + f.count + '）'" :value="f.media_id"/>
+      </el-select>
+      <el-button type="primary" @click="run" :loading="running">检测失效视频</el-button>
       <el-tag v-if="result" style="margin-left:8px">失效 {{ result.invalid }} · UP更新 {{ result.updates }}</el-tag>
     </div>
     <div style="color:#999;font-size:12px;margin-bottom:12px">
-      首次检测需逐条请求 B 站（视频失效 + UP主投稿），可能耗时几分钟，请耐心等待
+      按收藏夹检测更快；全部检测需逐条请求 B 站，可能耗时几分钟，请耐心等待
     </div>
     <el-tabs v-model="tab">
       <el-tab-pane label="提醒" name="alerts">
@@ -272,6 +276,7 @@ const Monitor = {
     const tab = ref('alerts');
     const alerts = ref([]); const invalidList = ref([]); const updates = ref([]);
     const running = ref(false); const result = ref(null);
+    const folders = ref([]); const selFolder = ref(null);
     const fmt = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN') : '';
     async function loadAll() {
       const d = await api('/alerts');
@@ -279,10 +284,14 @@ const Monitor = {
       invalidList.value = await api('/monitor/invalid');
       updates.value = await api('/monitor/updates');
     }
+    async function loadFolders() {
+      folders.value = await api('/favorites').catch(() => []);
+    }
     async function run() {
       running.value = true;
       try {
-        result.value = await api('/monitor/run', { method: 'POST' });
+        const q = selFolder.value ? `?media_id=${selFolder.value}` : '';
+        result.value = await api('/monitor/run' + q, { method: 'POST' });
         await loadAll();
         emit('refresh');
       } catch (e) { ElementPlus.ElMessage.error(e.message); }
@@ -293,8 +302,9 @@ const Monitor = {
       await loadAll();
       emit('refresh');
     }
-    onMounted(() => loadAll().catch(() => {}));
-    return { tab, alerts, invalidList, updates, running, result, fmt, run, markRead };
+    onMounted(() => { loadAll().catch(() => {}); loadFolders(); });
+    return { tab, alerts, invalidList, updates, running, result, folders, selFolder,
+             fmt, run, markRead };
   },
 };
 
