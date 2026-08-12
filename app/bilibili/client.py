@@ -14,6 +14,10 @@ UA = (
 class BiliError(Exception):
     """B 站接口返回非 0 code 或请求异常。"""
 
+    def __init__(self, message: str, code: int | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+
 
 class BiliClient:
     def __init__(self, cookies: dict | None = None,
@@ -33,7 +37,10 @@ class BiliClient:
         resp.raise_for_status()
         data = resp.json()
         if data.get("code") not in (0, None):
-            raise BiliError(f"{path} 返回错误: code={data.get('code')} {data.get('message', '')}")
+            raise BiliError(
+                f"{path} 返回错误: code={data.get('code')} {data.get('message', '')}",
+                code=data.get("code"),
+            )
         return data
 
     def is_logged_in(self) -> bool:
