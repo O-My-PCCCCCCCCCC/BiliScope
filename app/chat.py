@@ -7,6 +7,7 @@ import time
 
 import app.favtools as favtools
 from app.database import get_conn, init_db
+from app.downloader import start_download
 from app.llm.base import LLMClient
 
 SYSTEM_PROMPT = (
@@ -43,6 +44,16 @@ TOOLS = [
         "parameters": {"type": "object", "properties": {
             "link": {"type": "string", "description": "B 站视频链接或 BV 号"}},
             "required": ["link"]}}},
+    {"type": "function", "function": {"name": "download_videos",
+        "description": "批量下载视频为 MP4（后台执行），传入 B 站链接列表",
+        "parameters": {"type": "object", "properties": {
+            "urls": {"type": "array", "items": {"type": "string"}, "description": "B 站视频链接列表"}},
+            "required": ["urls"]}}},
+    {"type": "function", "function": {"name": "download_audio",
+        "description": "批量提取视频音频为 MP3（后台执行），传入 B 站链接列表",
+        "parameters": {"type": "object", "properties": {
+            "urls": {"type": "array", "items": {"type": "string"}, "description": "B 站视频链接列表"}},
+            "required": ["urls"]}}},
 ]
 
 TOOL_FUNCS = {
@@ -53,6 +64,8 @@ TOOL_FUNCS = {
     "move_fav_items": lambda a: favtools.move_fav_items(
         int(a.get("src_media_id", 0)), int(a.get("tar_media_id", 0)), a.get("bvids", [])),
     "analyze_video": lambda a: favtools.analyze_video(a.get("link", "")),
+    "download_videos": lambda a: start_download(a.get("urls", []), "mp4"),
+    "download_audio": lambda a: start_download(a.get("urls", []), "audio"),
 }
 
 

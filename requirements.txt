@@ -6,3 +6,4 @@ anthropic
 openai
 psutil
 pytest==8.3.5
+yt-dlp

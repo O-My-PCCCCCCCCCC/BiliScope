@@ -82,6 +82,57 @@ const DeepAnalysis = {
   },
 };
 
+const Downloads = {
+  template: `
+    <h2>下载管理</h2>
+    <el-card style="margin-bottom:16px">
+      <template #header>当前任务</template>
+      <div v-if="status.state === 'running'">
+        <el-progress :percentage="status.progress"/>
+        <div style="color:#999;font-size:12px;margin-top:4px">{{ status.message }}</div>
+        <div style="color:#666;font-size:12px;margin-top:2px">共 {{ status.tasks.length }} 个，当前：{{ status.current }}</div>
+      </div>
+      <div v-else-if="status.state === 'done'"><el-tag type="success">全部下载完成</el-tag></div>
+      <div v-else-if="status.state === 'error'"><el-tag type="danger">下载失败：{{ status.message }}</el-tag></div>
+      <div v-else style="color:#999">暂无任务。可以到 AI 助手让它批量下载，或点下方手动下载</div>
+      <div style="margin-top:10px">
+        <el-input v-model="manualUrl" placeholder="粘贴一个 B 站视频链接" style="width:360px"/>
+        <el-button type="primary" @click="manual('mp4')">下载视频</el-button>
+        <el-button @click="manual('audio')">下载音频</el-button>
+      </div>
+    </el-card>
+    <el-card>
+      <template #header>已下载文件（{{ files.length }}）</template>
+      <el-table :data="files" style="width:100%">
+        <el-table-column prop="name" label="文件名" min-width="300"/>
+      </el-table>
+    </el-card>
+  `,
+  setup() {
+    const status = ref({ state: 'idle', tasks: [], current: '', progress: 0, message: '' });
+    const files = ref([]); const manualUrl = ref('');
+    let timer = null;
+    async function load() {
+      status.value = await api('/downloads/status').catch(() => status.value);
+      files.value = (await api('/downloads/list').catch(() => [])).map(name => ({ name }));
+    }
+    async function manual(fmt) {
+      const url = manualUrl.value.trim();
+      if (!url) { ElementPlus.ElMessage.warning('请先粘贴链接'); return; }
+      manualUrl.value = '';
+      try {
+        await api('/downloads/run', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls: [url], fmt }) });
+        ElementPlus.ElMessage.success('已开始下载');
+        load();
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+    }
+    onMounted(() => { load(); timer = setInterval(load, 2000); });
+    onBeforeUnmount(() => { if (timer) clearInterval(timer); });
+    return { status, files, manualUrl, manual };
+  },
+};
+
 const Chat = {
   template: `
     <h2>AI 助手</h2>
@@ -827,7 +878,7 @@ const Settings = {
 };
 
 const App = {
-  components: { Overview, History, Favorites, Monitor, Analysis, Dynamics, DeepAnalysis, Chat, Settings },
+  components: { Overview, History, Favorites, Monitor, Analysis, Dynamics, DeepAnalysis, Downloads, Chat, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
@@ -840,6 +891,7 @@ const App = {
           <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>内容分析</el-menu-item>
           <el-menu-item index="deep"><el-icon><TrendCharts/></el-icon>深度分析</el-menu-item>
           <el-menu-item index="dynamics"><el-icon><Message/></el-icon>我的动态</el-menu-item>
+          <el-menu-item index="downloads"><el-icon><Download/></el-icon>下载管理</el-menu-item>
           <el-menu-item index="chat"><el-icon><ChatDotRound/></el-icon>AI 助手</el-menu-item>
           <el-menu-item index="settings"><el-icon><Setting/></el-icon>设置</el-menu-item>
         </el-menu>
@@ -857,6 +909,7 @@ const App = {
         <Analysis v-else-if="route === 'analysis'"/>
         <DeepAnalysis v-else-if="route === 'deep'"/>
         <Dynamics v-else-if="route === 'dynamics'"/>
+        <Downloads v-else-if="route === 'downloads'"/>
         <Chat v-else-if="route === 'chat'"/>
         <Settings v-else-if="route === 'settings'" :status="status" @refresh="loadStatus"/>
       </el-main>

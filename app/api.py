@@ -541,6 +541,31 @@ def analysis_deep() -> dict:
     }
 
 
+@router.post("/downloads/run")
+def downloads_run(payload: dict) -> dict:
+    from app.downloader import start_download
+    urls = (payload or {}).get("urls", [])
+    fmt = (payload or {}).get("fmt", "mp4")
+    if not urls:
+        raise HTTPException(status_code=400, detail="缺少 urls")
+    result = start_download(urls, fmt)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return {"ok": True}
+
+
+@router.get("/downloads/status")
+def downloads_status() -> dict:
+    from app.downloader import download_status
+    return download_status()
+
+
+@router.get("/downloads/list")
+def downloads_list() -> list:
+    from app.downloader import list_downloads
+    return list_downloads()
+
+
 @router.get("/collections")
 def collections() -> list:
     conn = get_conn()
