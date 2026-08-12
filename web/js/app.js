@@ -369,6 +369,8 @@ const Settings = {
             <el-descriptions-item label="等级">Lv.{{ account.stats.level }}</el-descriptions-item>
             <el-descriptions-item label="关注">{{ account.stats.following }}</el-descriptions-item>
             <el-descriptions-item label="粉丝">{{ account.stats.follower }}</el-descriptions-item>
+            <el-descriptions-item label="追番">{{ account.stats.bangumi }}</el-descriptions-item>
+            <el-descriptions-item label="追剧">{{ account.stats.drama }}</el-descriptions-item>
           </el-descriptions>
           <el-divider/>
           <div style="font-size:13px;color:#999;margin-bottom:8px">硬币明细（{{ account.coin_log.length }} 条）</div>

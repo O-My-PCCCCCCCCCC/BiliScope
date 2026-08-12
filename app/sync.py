@@ -109,8 +109,19 @@ def sync_coin_log(conn: sqlite3.Connection, client: BiliClient,
     return n
 
 
+def _bangumi_total(client: BiliClient, uid: int, type_: int) -> int:
+    try:
+        data = client.get_json(
+            "/x/space/bangumi/follow/list",
+            {"type": type_, "follow_status": 0, "pn": 1, "ps": 1, "vmid": uid},
+        )
+        return (data.get("data") or {}).get("total", 0)
+    except Exception:
+        return 0
+
+
 def sync_account(conn: sqlite3.Connection, client: BiliClient, uid: int) -> dict:
-    """采集账号信息：硬币余额、等级、关注/粉丝、硬币明细。"""
+    """采集账号信息：硬币、等级、关注/粉丝、追番/追剧订阅、硬币明细。"""
     nav = client.get_json("/x/web-interface/nav")["data"]
     coins = nav.get("money", 0)
     level = (nav.get("level_info") or {}).get("current_level", 0)
@@ -124,14 +135,17 @@ def sync_account(conn: sqlite3.Connection, client: BiliClient, uid: int) -> dict
         following = stat.get("following", following)
     except Exception:
         pass
+    bangumi = _bangumi_total(client, uid, 1)  # 追番
+    drama = _bangumi_total(client, uid, 2)    # 追剧
     conn.execute(
-        "INSERT INTO account_stats (coins, level, following, follower, uname, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (coins, level, following, follower, uname, int(time.time())),
+        "INSERT INTO account_stats (coins, level, following, follower, bangumi, drama, uname, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (coins, level, following, follower, bangumi, drama, uname, int(time.time())),
     )
     n_coins = sync_coin_log(conn, client)
     conn.commit()
     return {"coins": coins, "level": level, "following": following,
-            "follower": follower, "coin_log": n_coins}
+            "follower": follower, "bangumi": bangumi, "drama": drama,
+            "coin_log": n_coins}
 
 
 def run_full_sync(client: BiliClient | None = None) -> dict:

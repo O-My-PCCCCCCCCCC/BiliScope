@@ -92,6 +92,8 @@ CREATE TABLE IF NOT EXISTS account_stats (
     level INTEGER,
     following INTEGER,
     follower INTEGER,
+    bangumi INTEGER,
+    drama INTEGER,
     uname TEXT,
     updated_at INTEGER
 );
@@ -133,3 +135,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "view_count" not in cols:
         conn.execute("ALTER TABLE videos ADD COLUMN view_count INTEGER")
         conn.execute("ALTER TABLE videos ADD COLUMN danmaku INTEGER")
+    acols = {r[1] for r in conn.execute("PRAGMA table_info(account_stats)")}
+    if acols and "bangumi" not in acols:
+        conn.execute("ALTER TABLE account_stats ADD COLUMN bangumi INTEGER")
+        conn.execute("ALTER TABLE account_stats ADD COLUMN drama INTEGER")
