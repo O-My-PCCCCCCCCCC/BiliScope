@@ -42,7 +42,26 @@ python run.py
 - 通用聊天界面，多 LLM 提供层（Claude / OpenAI 兼容 / Ollama）
 - **工具调用**：让 AI 操作收藏夹——新建/删除收藏夹、移动视频、自动整理
 - 示例：「把音乐收藏夹里的视频整理到新文件夹」
-- 需先在设置页配置 LLM（Ollama 本地免费 / DeepSeek / Claude）
+
+## AI 大模型接入（本地 + 云并存）
+
+BiliScope 采用可插拔 LLM 提供层，**本地部署与云端接入两套并存**，设置页一个开关切换：
+
+| 方案 | 说明 | 成本 |
+|---|---|---|
+| **Ollama 本地** | 一键部署本地模型（设置页「检测硬件推荐模型」自动选型），完全免费离线 | ¥0 |
+| **OpenAI 兼容** | 接入 DeepSeek / 通义 / Kimi / 智谱 等任意 OpenAI 兼容大模型 | 按量，很便宜 |
+| **Claude** | 官方 Anthropic SDK 接入 | 按量 |
+
+```json
+// config.json 的 llm 配置
+"llm": { "provider": "ollama | openai | anthropic",
+         "api_key": "", "base_url": "", "model": "" }
+```
+
+- **想省心** → 云端 DeepSeek（填 key + base_url + 模型名即可）
+- **想免费离线** → Ollama 本地（检测硬件 → 一键拉模型）
+- 两者可随时切换，互不影响
 
 ## 测试
 
