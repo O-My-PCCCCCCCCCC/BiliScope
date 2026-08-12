@@ -7,6 +7,53 @@ async function api(path, options = {}) {
   return data;
 }
 
+const Analysis = {
+  template: `
+    <h2>内容分析</h2>
+    <div style="margin-bottom:12px">
+      <el-button type="primary" @click="run" :loading="running">分析未分析视频</el-button>
+      <el-tag style="margin-left:8px">已分析 {{ status.analyzed }} / {{ status.total }}</el-tag>
+    </div>
+    <el-card>
+      <template #header>观看内容主题分布</template>
+      <div data-theme-chart class="chart"></div>
+    </el-card>
+  `,
+  setup() {
+    const running = ref(false); const status = ref({ analyzed: 0, total: 0 });
+    async function run() {
+      running.value = true;
+      try {
+        const r = await api('/analysis/run?limit=50');
+        ElementPlus.ElMessage.success(`分析完成：${r.analyzed} 条`);
+        await loadStatus();
+        renderChart();
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+      finally { running.value = false; }
+    }
+    async function loadStatus() {
+      try { status.value = await api('/analysis/status'); } catch (e) {}
+    }
+    async function renderChart() {
+      const themes = await api('/analysis/themes').catch(() => []);
+      nextTick(() => {
+        const el = document.querySelector('[data-theme-chart]');
+        if (!el) return;
+        const chart = echarts.init(el, 'dark');
+        chart.setOption({
+          title: { text: '主题标签 TOP', textStyle: { fontSize: 14 } },
+          tooltip: {},
+          xAxis: { type: 'category', data: themes.map(t => t.tag), axisLabel: { rotate: 30 } },
+          yAxis: { type: 'value' },
+          series: [{ type: 'bar', data: themes.map(t => t.n) }],
+        });
+      });
+    }
+    onMounted(() => { loadStatus(); renderChart(); });
+    return { running, status, run };
+  },
+};
+
 const Overview = {
   props: ['status'],
   template: `
@@ -265,6 +312,26 @@ const Settings = {
         </el-form-item>
       </el-form>
     </el-card>
+    <el-card style="max-width:520px;margin-top:16px">
+      <template #header>内容分析（LLM）</template>
+      <el-form :model="llm" label-width="80px" label-position="left">
+        <el-form-item label="提供商">
+          <el-select v-model="llm.provider" style="width:100%">
+            <el-option label="Ollama（本地免费）" value="ollama"/>
+            <el-option label="Claude" value="anthropic"/>
+            <el-option label="OpenAI 兼容（DeepSeek等）" value="openai"/>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="API Key"><el-input v-model="llm.api_key" type="password"/></el-form-item>
+        <el-form-item label="Base URL"><el-input v-model="llm.base_url" placeholder="OpenAI 兼容地址，如 https://api.deepseek.com/v1"/></el-form-item>
+        <el-form-item label="模型"><el-input v-model="llm.model" placeholder="如 qwen2.5:7b / deepseek-chat"/></el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="saveLlm">保存</el-button>
+          <el-button @click="recommendLocal" :loading="hwLoading">检测硬件推荐模型</el-button>
+        </el-form-item>
+        <el-form-item v-if="hwModel"><el-tag type="success">推荐：{{ hwModel }}</el-tag></el-form-item>
+      </el-form>
+    </el-card>
     <el-dialog v-model="qrVisible" title="扫码登录 B 站" width="340px" @closed="stopPoll">
       <div id="qrcode" style="display:flex;justify-content:center"></div>
       <p style="text-align:center;margin-top:12px">{{ qrMsg }}</p>
@@ -313,6 +380,22 @@ const Settings = {
     async function loadConfig() {
       const c = await api('/config');
       smtp.value = { ...c.smtp };
+      llm.value = { provider: 'ollama', api_key: '', base_url: '', model: '', ...c.llm };
+    }
+    async function saveLlm() {
+      await api('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ llm: llm.value }) });
+      ElementPlus.ElMessage.success('LLM 配置已保存');
+    }
+    async function recommendLocal() {
+      hwLoading.value = true;
+      try {
+        const h = await api('/hardware');
+        hwModel.value = h.recommended_model;
+        llm.value.provider = 'ollama';
+        llm.value.model = h.recommended_model;
+        ElementPlus.ElMessage.success(`推荐 ${h.recommended_model}（内存 ${h.ram_gb}G / 显存 ${(h.gpu[0]?.vram_gb || 0)}G）`);
+      } finally { hwLoading.value = false; }
     }
     async function saveSmtp() {
       await api('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -328,13 +411,16 @@ const Settings = {
       } catch (e) { ElementPlus.ElMessage.error(e.message); }
       finally { testing.value = false; }
     }
+    const llm = ref({ provider: 'ollama', api_key: '', base_url: '', model: '' });
+    const hwLoading = ref(false); const hwModel = ref('');
     onMounted(() => { loadConfig().catch(() => {}); });
-    return { qrVisible, qrMsg, syncing, smtp, testing, fmt, openQr, stopPoll, sync, saveSmtp, testEmail };
+    return { qrVisible, qrMsg, syncing, smtp, testing, llm, hwLoading, hwModel,
+             fmt, openQr, stopPoll, sync, saveSmtp, testEmail, saveLlm, recommendLocal };
   },
 };
 
 const App = {
-  components: { Overview, History, Favorites, Monitor, Settings },
+  components: { Overview, History, Favorites, Monitor, Analysis, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
@@ -344,6 +430,7 @@ const App = {
           <el-menu-item index="history"><el-icon><Clock/></el-icon>观看历史</el-menu-item>
           <el-menu-item index="favorites"><el-icon><Star/></el-icon>收藏夹</el-menu-item>
           <el-menu-item index="monitor"><el-icon><Bell/></el-icon>监测中心<el-badge :value="status.alerts_unread || 0" :hidden="!(status.alerts_unread)" class="menu-badge"/></el-menu-item>
+          <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>内容分析</el-menu-item>
           <el-menu-item index="settings"><el-icon><Setting/></el-icon>设置</el-menu-item>
         </el-menu>
         <div class="sync-status">
@@ -357,6 +444,7 @@ const App = {
         <History v-else-if="route === 'history'"/>
         <Favorites v-else-if="route === 'favorites'"/>
         <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
+        <Analysis v-else-if="route === 'analysis'"/>
         <Settings v-else-if="route === 'settings'" :status="status" @refresh="loadStatus"/>
       </el-main>
     </el-container>

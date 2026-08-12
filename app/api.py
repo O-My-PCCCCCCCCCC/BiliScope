@@ -28,8 +28,16 @@ class SmtpPayload(BaseModel):
     to: str | None = None
 
 
+class LlmPayload(BaseModel):
+    provider: str | None = None
+    api_key: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+
+
 class ConfigPayload(BaseModel):
     smtp: SmtpPayload | None = None
+    llm: LlmPayload | None = None
 
 router = APIRouter(prefix="/api")
 
@@ -201,7 +209,10 @@ def config_get() -> dict:
     cfg = load_config()
     smtp = dict(cfg.get("smtp") or {})
     smtp["password"] = MASKED if smtp.get("password") else ""
-    return {"smtp": smtp, "task_interval": cfg.get("task_interval")}
+    llm = dict(cfg.get("llm") or {})
+    if llm.get("api_key"):
+        llm["api_key"] = MASKED
+    return {"smtp": smtp, "llm": llm, "task_interval": cfg.get("task_interval")}
 
 
 @router.post("/config")
@@ -216,6 +227,15 @@ def config_save(payload: ConfigPayload) -> dict:
         pw = data.get("password")
         if pw and pw != MASKED:
             smtp["password"] = pw
+    llm = cfg.setdefault("llm", {})
+    if payload.llm:
+        data = payload.llm.model_dump()
+        for k in ("provider", "base_url", "model"):
+            if data.get(k) is not None:
+                llm[k] = data[k]
+        key = data.get("api_key")
+        if key and key != MASKED:
+            llm["api_key"] = key
     save_config(cfg)
     return {"ok": True}
 
