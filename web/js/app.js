@@ -405,64 +405,115 @@ const Overview = {
   props: ['status'],
   template: `
     <h2>概览</h2>
-    <el-row :gutter="16" class="cards">
-      <el-col :span="6" v-for="c in cards" :key="c.label">
-        <el-card><div class="card-num">{{ c.value }}</div><div class="card-label">{{ c.label }}</div></el-card>
+    <el-row :gutter="12" class="cards" style="margin-bottom:16px">
+      <el-col :span="3" v-for="k in kpis" :key="k.label">
+        <el-card><div class="card-num">{{ k.value }}</div><div class="card-label">{{ k.label }}</div></el-card>
       </el-col>
     </el-row>
-    <el-row :gutter="16" class="charts">
-      <el-col :span="12"><el-card><div ref="trendChart" class="chart"></div></el-card></el-col>
-      <el-col :span="12"><el-card><div ref="upChart" class="chart"></div></el-card></el-col>
-      <el-col :span="12"><el-card><div ref="hourChart" class="chart"></div></el-card></el-col>
-      <el-col :span="12"><el-card><div ref="tnameChart" class="chart"></div></el-card></el-col>
+    <el-row :gutter="12" class="charts">
+      <el-col :span="10"><el-card><div data-monthly class="chart"></div></el-card></el-col>
+      <el-col :span="7"><el-card><div data-timebuckets class="chart"></div></el-card></el-col>
+      <el-col :span="7"><el-card><div data-topup class="chart"></div></el-card></el-col>
+      <el-col :span="8"><el-card><div data-completion class="chart"></div></el-card></el-col>
+      <el-col :span="8"><el-card><div data-popularity class="chart"></div></el-card></el-col>
+      <el-col :span="8"><el-card><div data-weekend class="chart"></div></el-card></el-col>
     </el-row>
+    <el-collapse style="margin-top:16px">
+      <el-collapse-item title="UP主深度榜（观看时长 TOP）" name="up">
+        <el-table :data="upDepth" size="small" style="width:100%">
+          <el-table-column prop="up_name" label="UP主" width="160"/>
+          <el-table-column prop="views" label="观看次数" width="100"/>
+          <el-table-column label="总时长" width="120">
+            <template #default="s">{{ (s.row.total_sec / 3600).toFixed(1) }} 小时</template>
+          </el-table-column>
+          <el-table-column label="最近观看" min-width="140">
+            <template #default="s">{{ timeAgo(s.row.last_view) }}</template>
+          </el-table-column>
+        </el-table>
+      </el-collapse-item>
+      <el-collapse-item :title="'吃灰收藏明细（' + graveyardItems.length + ' 个）'" name="gy">
+        <el-table :data="graveyardItems" size="small" max-height="360" style="width:100%">
+          <el-table-column prop="title" label="标题" min-width="240"/>
+          <el-table-column prop="up_name" label="UP主" width="120"/>
+          <el-table-column prop="tname" label="分区" width="90"/>
+          <el-table-column label="收藏时间" width="150">
+            <template #default="s">{{ fmt(s.row.fav_time) }}</template>
+          </el-table-column>
+        </el-table>
+      </el-collapse-item>
+    </el-collapse>
   `,
-  computed: {
-    cards() {
-      const c = this.status.counts || {};
+  setup(props) {
+    const profile = ref({});
+    const monthly = ref([]);
+    const topUps = ref([]);
+    const upDepth = ref([]);
+    const graveyardItems = ref([]);
+    const fmt = ts => ts ? new Date(ts * 1000).toLocaleDateString('zh-CN') : '';
+    function timeAgo(ts) {
+      if (!ts) return '';
+      const diff = (Date.now() / 1000 - ts);
+      if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+      if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+      return new Date(ts * 1000).toLocaleDateString('zh-CN');
+    }
+    const kpis = Vue.computed(() => {
+      const p = profile.value;
+      const c = props.status.counts || {};
       return [
-        { label: '观看历史', value: c.history ?? '-' },
-        { label: '收藏视频', value: c.favorites ?? '-' },
-        { label: '收藏夹', value: c.folders ?? '-' },
-        { label: '关注', value: c.followings ?? '-' },
+        { label: '总观看数', value: p.total_views ?? '-' },
+        { label: '总时长(小时)', value: p.total_duration_h ?? '-' },
+        { label: '活跃天数', value: p.active_days ?? '-' },
+        { label: '日均观看', value: p.avg_daily ?? '-' },
+        { label: '黄金时段', value: p.peak_hour ?? '-' },
+        { label: '最活跃周几', value: p.peak_weekday ?? '-' },
+        { label: '收藏数', value: c.favorites ?? '-' },
+        { label: '吃灰收藏', value: graveyardItems.value.length },
       ];
-    },
-  },
-  async mounted() {
-    const s = await api('/stats/overview').catch(() => null);
-    if (s) this.renderCharts(s);
-  },
-  methods: {
-    renderCharts(s) {
+    });
+    async function load() {
+      const [ov, prof, mo, det, gy] = await Promise.all([
+        api('/stats/overview'), api('/analysis/profile'), api('/analysis/monthly'),
+        api('/analysis/detailed'), api('/analysis/graveyard-list'),
+      ]).catch(() => [null, null, [], null, []]);
+      if (!prof) return;
+      profile.value = prof;
+      monthly.value = mo;
+      topUps.value = ov?.top_ups || [];
+      upDepth.value = det?.up_depth || [];
+      graveyardItems.value = gy;
       nextTick(() => {
-        const specs = {
-          trendChart: { type: 'line', title: '近30天观看趋势',
-            x: s.trend.map(t => t.day), y: s.trend.map(t => t.n) },
-          upChart: { type: 'bar', title: '常看UP主 TOP10',
-            x: s.top_ups.map(u => u.up_name), y: s.top_ups.map(u => u.n) },
-          hourChart: { type: 'bar', title: '观看时段分布',
-            x: s.hours.map(h => h.hour + '时'), y: s.hours.map(h => h.n) },
-          tnameChart: { type: 'pie', title: '视频分区分布',
-            data: s.tnames.map(t => ({ name: t.tname, value: t.n })) },
+        const mk = (sel, option) => {
+          const el = document.querySelector(sel);
+          if (el) echarts.init(el, 'dark').setOption(option);
         };
-        for (const [refName, spec] of Object.entries(specs)) {
-          const el = this.$refs[refName];
-          if (!el) continue;
-          const chart = echarts.init(el, 'dark');
-          if (spec.type === 'pie') {
-            chart.setOption(pieOption(spec.title, spec.data));
-          } else {
-            chart.setOption({
-              title: { text: spec.title, textStyle: { fontSize: 14 } },
-              tooltip: { trigger: 'axis', confine: true },
-              xAxis: { type: 'category', data: spec.x, axisLabel: { rotate: spec.x.length > 8 ? 30 : 0 } },
-              yAxis: { type: 'value' },
-              series: [{ type: spec.type, data: spec.y || spec.data, smooth: true }],
-            });
-          }
-        }
+        mk('[data-monthly]', {
+          title: { text: '月度观看趋势', textStyle: { fontSize: 14 } },
+          tooltip: { trigger: 'axis', confine: true },
+          xAxis: { type: 'category', data: mo.map(x => x.ym) },
+          yAxis: { type: 'value' },
+          series: [{ type: 'line', smooth: true, areaStyle: {}, data: mo.map(x => x.n),
+                     itemStyle: { color: '#fb7299' } }],
+        });
+        const pie = (data, sel, title) => mk(sel, pieOption(
+          title, data.map(x => ({ name: x.bucket || x.kind, value: x.n }))
+        ));
+        pie(det?.time_buckets || [], '[data-timebuckets]', '观看时段');
+        mk('[data-topup]', {
+          title: { text: '常看UP主 TOP', textStyle: { fontSize: 14 } },
+          tooltip: { trigger: 'axis', confine: true },
+          xAxis: { type: 'value' },
+          yAxis: { type: 'category', data: topUps.value.slice(0, 8).map(u => u.up_name), inverse: true },
+          series: [{ type: 'bar', data: topUps.value.slice(0, 8).map(u => u.n),
+                     itemStyle: { color: '#fb7299' }, barMaxWidth: 14 }],
+        });
+        pie(det?.completion || [], '[data-completion]', '观看完整度');
+        pie(det?.popularity || [], '[data-popularity]', '热门 vs 小众');
+        pie(det?.weekday_weekend || [], '[data-weekend]', '工作日 vs 周末');
       });
-    },
+    }
+    onMounted(load);
+    return { kpis, upDepth, graveyardItems, fmt, timeAgo };
   },
 };
 
@@ -1047,7 +1098,7 @@ const ContentBrowser = {
 };
 
 const App = {
-  components: { Overview, ContentBrowser, Monitor, Analysis, DeepAnalysis, Downloads, Chat, Settings },
+  components: { Overview, ContentBrowser, Monitor, Analysis, Downloads, Chat, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
@@ -1068,10 +1119,7 @@ const App = {
         </div>
       </el-aside>
       <el-main>
-        <template v-if="route === 'overview'">
-          <Overview :status="status" @refresh="loadStatus"/>
-          <DeepAnalysis/>
-        </template>
+        <Overview v-if="route === 'overview'" :status="status" @refresh="loadStatus"/>
         <ContentBrowser v-else-if="route === 'content'"/>
         <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
         <Analysis v-else-if="route === 'analysis'"/>
