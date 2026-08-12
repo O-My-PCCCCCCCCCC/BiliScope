@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parent.parent
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    from app.scheduler import start_scheduler
+    start_scheduler()
     yield
 
 
