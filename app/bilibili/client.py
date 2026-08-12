@@ -47,6 +47,11 @@ class BiliClient:
         data = self.get_json("/x/web-interface/nav")
         return bool(data.get("data", {}).get("isLogin"))
 
+    def get_wbi_json(self, path: str, params: dict | None = None) -> dict:
+        from app.bilibili import wbi
+        signed = wbi.sign_wbi(self, params or {})
+        return self.get_json(path, signed)
+
     def close(self) -> None:
         self.session.close()
 

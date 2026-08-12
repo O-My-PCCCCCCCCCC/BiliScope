@@ -39,3 +39,48 @@ def check_invalid(conn: sqlite3.Connection, client: BiliClient,
         time.sleep(delay)
     conn.commit()
     return new_invalid
+
+
+def check_updates(conn: sqlite3.Connection, client: BiliClient,
+                  limit: int = 20, delay: float = 0.5) -> int:
+    """检查关注列表 UP 主最新投稿，有更新则写提醒。返回新提醒数。"""
+    rows = conn.execute(
+        "SELECT mid, uname FROM followings LIMIT ?", (limit,)
+    ).fetchall()
+    new_updates = 0
+    now = int(time.time())
+    for row in rows:
+        mid = row["mid"]
+        try:
+            data = client.get_wbi_json(
+                "/x/space/wbi/arc/search",
+                {"mid": mid, "pn": 1, "ps": 1, "order": "pubdate"},
+            )
+            vlist = (data.get("data", {}).get("list") or {}).get("vlist") or []
+            if not vlist:
+                continue
+            v = vlist[0]
+            bvid = v["bvid"]
+            cur = conn.execute(
+                "SELECT last_bvid FROM updates WHERE mid = ?", (mid,)
+            ).fetchone()
+            if cur is None:
+                conn.execute(
+                    "INSERT INTO updates (mid, last_bvid, last_pubdate, checked_at) VALUES (?, ?, ?, ?)",
+                    (mid, bvid, v.get("created", 0), now),
+                )
+            elif cur["last_bvid"] != bvid:
+                conn.execute(
+                    "UPDATE updates SET last_bvid = ?, last_pubdate = ?, checked_at = ? WHERE mid = ?",
+                    (bvid, v.get("created", 0), now, mid),
+                )
+                add_alert(conn, "update", f"{row['uname']} 发布了新视频",
+                          f"{v.get('title', '')} ({bvid})")
+                new_updates += 1
+            else:
+                conn.execute("UPDATE updates SET checked_at = ? WHERE mid = ?", (now, mid))
+        except Exception:
+            continue
+        time.sleep(delay)
+    conn.commit()
+    return new_updates
