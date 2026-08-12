@@ -35,6 +35,9 @@ def status() -> dict:
             "followings": conn.execute("SELECT COUNT(*) FROM followings").fetchone()[0],
             "folders": conn.execute("SELECT COUNT(*) FROM fav_folders").fetchone()[0],
         }
+        alerts_unread = conn.execute(
+            "SELECT COUNT(*) FROM alerts WHERE read = 0"
+        ).fetchone()[0]
     finally:
         conn.close()
     return {
@@ -42,6 +45,7 @@ def status() -> dict:
         "login_at": cfg.get("login_at"),
         "uid": cfg.get("uid"),
         "counts": counts,
+        "alerts_unread": alerts_unread,
     }
 
 
@@ -60,6 +64,33 @@ def login_poll(qrcode_key: str = Query(...)) -> dict:
     if result["status"] in ("ok", "expired"):
         _login_clients.pop(qrcode_key, None)
     return result
+
+
+@router.get("/alerts")
+def alerts(unread_only: bool = False) -> dict:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        where = "WHERE read = 0" if unread_only else ""
+        unread = conn.execute("SELECT COUNT(*) FROM alerts WHERE read = 0").fetchone()[0]
+        rows = conn.execute(
+            f"SELECT * FROM alerts {where} ORDER BY created_at DESC LIMIT 100"
+        ).fetchall()
+    finally:
+        conn.close()
+    return {"unread": unread, "items": [dict(r) for r in rows]}
+
+
+@router.post("/alerts/{alert_id}/read")
+def alert_read(alert_id: int) -> dict:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        conn.execute("UPDATE alerts SET read = 1 WHERE id = ?", (alert_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
 
 
 @router.post("/sync")
