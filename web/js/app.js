@@ -213,7 +213,7 @@ const History = {
     <div class="bili-grid">
       <div class="bili-card" v-for="it in items" :key="it.bvid" @click="open(it)">
         <div class="bili-cover">
-          <img :src="imgUrl(it.pic)" loading="lazy" :alt="it.title"/>
+          <img :src="imgUrl(it.pic)" loading="lazy" decoding="async" :alt="it.title"/>
           <span class="bili-duration">{{ fmtDur(it.duration) }}</span>
         </div>
         <div class="bili-title">{{ it.title }}</div>
@@ -306,11 +306,11 @@ const Favorites = {
           <span class="fav-side-count">{{ f.count }}</span>
         </div>
       </div>
-      <div class="fav-main" v-loading="loading">
+      <div class="fav-main" v-loading="loading" @scroll="onFavScroll">
         <div class="bili-grid">
           <div class="bili-card" v-for="it in items" :key="it.bvid" @click="play(it)">
             <div class="bili-cover">
-              <img v-if="it.title" :src="imgUrl(it.pic)" loading="lazy" :alt="it.title"/>
+              <img v-if="it.title" :src="imgUrl(it.pic)" loading="lazy" decoding="async" :alt="it.title"/>
               <el-tag v-else type="danger" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">已失效</el-tag>
               <span v-if="it.title" class="bili-duration">{{ fmtDur(it.duration) }}</span>
             </div>
@@ -321,6 +321,8 @@ const Favorites = {
             </div>
           </div>
         </div>
+        <div v-if="loading" class="empty-tip">加载中...</div>
+        <div v-else-if="!hasMore && items.length" class="empty-tip">已经到底啦，共 {{ items.length }} 条</div>
       </div>
     </div>
       </el-tab-pane>
@@ -328,7 +330,7 @@ const Favorites = {
         <div class="bili-grid">
           <div class="bili-card" v-for="c in collections" :key="c.collection_id + '-' + c.category" @click="openCollection(c)">
             <div class="bili-cover">
-              <img :src="imgUrl(c.cover)" loading="lazy" :alt="c.title"/>
+              <img :src="imgUrl(c.cover)" loading="lazy" decoding="async" :alt="c.title"/>
             </div>
             <div class="bili-title">{{ c.title }}</div>
             <div class="bili-meta">
@@ -369,12 +371,26 @@ const Favorites = {
       collections.value = await api('/collections').catch(() => []);
       collectedFolders.value = await api('/favorites/collected').catch(() => []);
     }
+    const page = ref(1); const hasMore = ref(true);
     async function select(f) {
-      activeId.value = f.media_id; loading.value = true;
+      activeId.value = f.media_id;
+      items.value = []; page.value = 1; hasMore.value = true;
+      await loadPage();
+    }
+    async function loadPage() {
+      if (loading.value || !activeId.value) return;
+      loading.value = true;
       try {
-        const d = await api(`/favorites/${f.media_id}?page_size=200`);
-        items.value = d.items;
+        const d = await api(`/favorites/${activeId.value}?page=${page.value}&page_size=24`);
+        items.value.push(...d.items);
+        hasMore.value = items.value.length < d.total;
+        if (hasMore.value) page.value += 1;
       } finally { loading.value = false; }
+    }
+    function onFavScroll() {
+      const el = document.querySelector('.fav-main');
+      if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - 300
+          && !loading.value && hasMore.value) loadPage();
     }
     function play(it) {
       if (it.title) window.open(`https://www.bilibili.com/video/${it.bvid}`, '_blank');
@@ -396,8 +412,8 @@ const Favorites = {
       return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
     }
     onMounted(() => { loadFolders(); loadExtras(); });
-    return { folders, items, activeId, loading, favTab, collections, collectedFolders,
-             select, play, openCollection, openCollected, imgUrl, fmtNum, fmtDur };
+    return { folders, items, activeId, loading, favTab, collections, collectedFolders, hasMore,
+             select, play, openCollection, openCollected, onFavScroll, imgUrl, fmtNum, fmtDur };
   },
 };
 
