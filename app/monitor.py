@@ -10,9 +10,13 @@ from app.notify import add_alert
 
 def check_invalid(conn: sqlite3.Connection, client: BiliClient,
                   limit: int = 100, delay: float = 0.3,
-                  media_id: int | None = None) -> int:
-    """检查视频是否失效，返回新失效数。media_id 指定时只检查该收藏夹。"""
-    if media_id:
+                  media_id: int | None = None, history_only: bool = False) -> int:
+    """检查视频是否失效，返回新失效数。可指定只看历史或某个收藏夹。"""
+    if history_only:
+        rows = conn.execute(
+            "SELECT DISTINCT bvid FROM history LIMIT ?", (limit,)
+        ).fetchall()
+    elif media_id:
         rows = conn.execute(
             "SELECT DISTINCT bvid FROM fav_items WHERE media_id = ? LIMIT ?",
             (media_id, limit),
