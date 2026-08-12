@@ -35,3 +35,12 @@ h2 { margin: 8px 0 16px; font-size: 20px; }
 .fav-main { flex: 1; min-width: 0; overflow-y: auto; padding-right: 4px; }
 .empty-tip { color: #666; padding: 40px; text-align: center; }
 .folder-cover { display: flex; align-items: center; justify-content: center; font-size: 40px; color: #999; }
+/* AI 聊天 */
+.chat-box { height: calc(100vh - 240px); overflow-y: auto; border: 1px solid #333; border-radius: 8px; padding: 16px; margin-bottom: 12px; background: #1a1a1a; }
+.chat-msg { display: flex; margin-bottom: 12px; }
+.chat-msg.user { justify-content: flex-end; }
+.chat-bubble { max-width: 72%; padding: 10px 14px; border-radius: 10px; background: #2a2a2a; color: #e5e5e5; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.chat-msg.user .chat-bubble { background: #fb7299; color: #fff; }
+.chat-msg.tool { justify-content: center; }
+.chat-msg.tool .chat-bubble { background: transparent; color: #999; font-size: 12px; padding: 2px 4px; }
+.chat-input { display: flex; gap: 8px; }

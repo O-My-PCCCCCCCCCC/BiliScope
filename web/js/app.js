@@ -14,6 +14,73 @@ const imgUrl = u => {
   return '/api/img?url=' + encodeURIComponent(src);
 };
 
+const Chat = {
+  template: `
+    <h2>AI 助手</h2>
+    <div class="chat-box" ref="chatBox">
+      <div v-for="(m, i) in display" :key="i" class="chat-msg" :class="m.role">
+        <div class="chat-bubble" v-if="m.text">{{ m.text }}</div>
+      </div>
+      <div v-if="loading" class="chat-msg assistant"><div class="chat-bubble">思考中...</div></div>
+    </div>
+    <div class="chat-input">
+      <el-input v-model="input" placeholder="例如：把音乐收藏夹里的视频整理到新文件夹" @keyup.enter="send"/>
+      <el-button type="primary" @click="send" :loading="loading">发送</el-button>
+      <el-button @click="reset">清空</el-button>
+    </div>
+  `,
+  setup() {
+    const messages = ref([]); const display = ref([]);
+    const input = ref(''); const loading = ref(false);
+    async function loadHistory() {
+      try {
+        const d = await api('/chat/history');
+        messages.value = d.messages;
+        buildDisplay();
+      } catch (e) {}
+    }
+    function buildDisplay() {
+      const out = [];
+      for (const m of messages.value) {
+        if (m.role === 'user') out.push({ role: 'user', text: m.content });
+        else if (m.role === 'assistant' && m.content) out.push({ role: 'assistant', text: m.content });
+        else if (m.role === 'assistant' && m.tool_calls) {
+          out.push({ role: 'tool', text: '🔧 调用：' + m.tool_calls.map(t => t.function.name).join('、') });
+        } else if (m.role === 'tool') {
+          let brief = m.content || '';
+          if (brief.length > 120) brief = brief.slice(0, 120) + '…';
+          out.push({ role: 'tool', text: '  ✅ ' + brief });
+        }
+      }
+      display.value = out;
+      nextTick(() => {
+        const box = document.querySelector('.chat-box');
+        if (box) box.scrollTop = box.scrollHeight;
+      });
+    }
+    async function send() {
+      const text = input.value.trim();
+      if (!text || loading.value) return;
+      input.value = '';
+      loading.value = true;
+      try {
+        await api('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text }) });
+        await loadHistory();
+      } catch (e) {
+        ElementPlus.ElMessage.error(e.message);
+        display.value.push({ role: 'assistant', text: '⚠️ ' + e.message });
+      } finally { loading.value = false; }
+    }
+    async function reset() {
+      await api('/chat/reset', { method: 'POST' });
+      messages.value = []; display.value = [];
+    }
+    onMounted(() => loadHistory().catch(() => {}));
+    return { messages, display, input, loading, send, reset };
+  },
+};
+
 const Analysis = {
   template: `
     <h2>内容分析</h2>
@@ -580,7 +647,7 @@ const Settings = {
 };
 
 const App = {
-  components: { Overview, History, Favorites, Monitor, Analysis, Settings },
+  components: { Overview, History, Favorites, Monitor, Analysis, Chat, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
@@ -591,6 +658,7 @@ const App = {
           <el-menu-item index="favorites"><el-icon><Star/></el-icon>收藏夹</el-menu-item>
           <el-menu-item index="monitor"><el-icon><Bell/></el-icon>监测中心<el-badge :value="status.alerts_unread || 0" :hidden="!(status.alerts_unread)" class="menu-badge"/></el-menu-item>
           <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>内容分析</el-menu-item>
+          <el-menu-item index="chat"><el-icon><ChatDotRound/></el-icon>AI 助手</el-menu-item>
           <el-menu-item index="settings"><el-icon><Setting/></el-icon>设置</el-menu-item>
         </el-menu>
         <div class="sync-status">
@@ -605,6 +673,7 @@ const App = {
         <Favorites v-else-if="route === 'favorites'"/>
         <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
         <Analysis v-else-if="route === 'analysis'"/>
+        <Chat v-else-if="route === 'chat'"/>
         <Settings v-else-if="route === 'settings'" :status="status" @refresh="loadStatus"/>
       </el-main>
     </el-container>
