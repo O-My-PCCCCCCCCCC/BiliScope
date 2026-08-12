@@ -7,8 +7,12 @@ async function api(path, options = {}) {
   return data;
 }
 
-// B 站 CDN 防盗链，统一走后端图片代理
-const imgUrl = u => u ? '/api/img?url=' + encodeURIComponent(u) : '';
+// B 站 CDN 防盗链，统一走后端图片代理；追加缩略图参数，4K 下大幅降低解码/缩放开销
+const imgUrl = u => {
+  if (!u) return '';
+  const src = u.includes('@') ? u : u + '@320w_200h_1c.webp';
+  return '/api/img?url=' + encodeURIComponent(src);
+};
 
 const Analysis = {
   template: `
