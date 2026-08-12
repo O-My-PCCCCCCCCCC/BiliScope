@@ -405,6 +405,13 @@ const Overview = {
   props: ['status'],
   template: `
     <h2>概览</h2>
+    <div style="margin-bottom:16px">
+      <el-button @click="genWeekly" :loading="weeklyLoading" type="primary" plain>生成 AI 周报评价</el-button>
+    </div>
+    <el-card v-if="weeklyReport" style="margin-bottom:16px">
+      <template #header>📋 本周评价</template>
+      <div class="weekly-report">{{ weeklyReport }}</div>
+    </el-card>
     <el-row :gutter="12" class="cards" style="margin-bottom:16px">
       <el-col :span="3" v-for="k in kpis" :key="k.label">
         <el-card><div class="card-num">{{ k.value }}</div><div class="card-label">{{ k.label }}</div></el-card>
@@ -456,6 +463,16 @@ const Overview = {
       if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
       if (diff < 604800) return Math.floor(diff / 86400) + '天前';
       return new Date(ts * 1000).toLocaleDateString('zh-CN');
+    }
+    const weeklyReport = ref('');
+    const weeklyLoading = ref(false);
+    async function genWeekly() {
+      weeklyLoading.value = true;
+      try {
+        const r = await api('/report/weekly-ai', { method: 'POST' });
+        weeklyReport.value = r.report;
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+      finally { weeklyLoading.value = false; }
     }
     const kpis = Vue.computed(() => {
       const p = profile.value;
@@ -513,7 +530,7 @@ const Overview = {
       });
     }
     onMounted(load);
-    return { kpis, upDepth, graveyardItems, fmt, timeAgo };
+    return { kpis, upDepth, graveyardItems, fmt, timeAgo, weeklyReport, weeklyLoading, genWeekly };
   },
 };
 
@@ -1103,6 +1120,17 @@ const App = {
     <el-container class="layout">
       <el-aside width="220px" class="aside">
         <div class="logo">BiliScope</div>
+        <div class="account-card" v-if="status.logged_in && accountInfo.stats">
+          <img :src="imgUrl(accountInfo.stats.face)" class="account-avatar" alt="头像"/>
+          <div class="account-info">
+            <div class="account-name">{{ accountInfo.stats.uname }}</div>
+            <div class="account-uid">UID {{ status.uid }}</div>
+            <div class="account-lv">Lv.{{ accountInfo.stats.level }}
+              <el-progress :percentage="lvPct" :show-text="false" :stroke-width="5" style="margin-top:3px"/>
+            </div>
+            <div class="account-lv-pred">{{ accountInfo.stats.lv_prediction?.text }}</div>
+          </div>
+        </div>
         <el-menu :default-active="route" @select="route = $event" class="menu">
           <el-menu-item index="overview"><el-icon><DataLine/></el-icon>概览</el-menu-item>
           <el-menu-item index="content"><el-icon><FolderOpened/></el-icon>内容浏览</el-menu-item>
@@ -1132,11 +1160,18 @@ const App = {
   setup() {
     const route = ref('overview');
     const status = ref({ logged_in: false, counts: {} });
+    const accountInfo = ref({ stats: null, coin_log: [] });
+    const lvPct = Vue.computed(() => {
+      const s = accountInfo.value.stats;
+      if (!s || !s.current_min || !s.next_exp || s.next_exp <= s.current_min) return 0;
+      return Math.min(100, Math.round((s.current_exp - s.current_min) / (s.next_exp - s.current_min) * 100));
+    });
     async function loadStatus() {
       try { status.value = await api('/status'); } catch (e) {}
+      try { accountInfo.value = await api('/account'); } catch (e) {}
     }
     onMounted(loadStatus);
-    return { route, status, loadStatus };
+    return { route, status, accountInfo, lvPct, loadStatus, imgUrl };
   },
 };
 

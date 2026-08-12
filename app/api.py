@@ -370,8 +370,41 @@ def account_info() -> dict:
         ).fetchall()
     finally:
         conn.close()
-    return {"stats": dict(row) if row else None,
-            "coin_log": [dict(r) for r in logs]}
+    stats = dict(row) if row else None
+    if stats:
+        stats["lv_prediction"] = _lv_prediction(stats)
+    return {"stats": stats, "coin_log": [dict(r) for r in logs]}
+
+
+@router.post("/report/weekly-ai")
+def report_weekly_ai() -> dict:
+    if not get_cookies():
+        raise HTTPException(status_code=401, detail="未登录，请先扫码登录")
+    llm_cfg = load_config().get("llm") or {}
+    if not llm_cfg.get("provider"):
+        raise HTTPException(status_code=400, detail="未配置 LLM，请先在设置中选择")
+    conn = get_conn()
+    init_db(conn)
+    try:
+        from app.report import generate_weekly_ai
+        result = generate_weekly_ai(conn, get_llm_client(llm_cfg))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI 周报生成失败: {e}")
+    finally:
+        conn.close()
+    return result
+
+
+def _lv_prediction(stats: dict) -> dict:
+    """根据当前经验预测到 LV6 的时间（估算）。"""
+    level = stats.get("level") or 0
+    cur = stats.get("current_exp") or 0
+    if level >= 6:
+        return {"level6": True, "text": "已达 LV6"}
+    need = 28800 - cur  # LV6 门槛经验
+    days = max(1, round(need / 15))  # 按日均 15 exp 估算
+    return {"level6": False, "need_exp": need, "days": days,
+            "text": f"距 LV6 还需约 {need} exp，按日均 15 exp 估算约 {days} 天（{days / 365:.1f} 年）"}
 
 
 @router.get("/hardware")

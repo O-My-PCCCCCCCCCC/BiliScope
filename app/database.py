@@ -95,6 +95,11 @@ CREATE TABLE IF NOT EXISTS account_stats (
     bangumi INTEGER,
     drama INTEGER,
     uname TEXT,
+    face TEXT,
+    sign TEXT,
+    current_exp INTEGER,
+    current_min INTEGER,
+    next_exp INTEGER,
     updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS coin_log (
@@ -176,3 +181,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if acols and "bangumi" not in acols:
         conn.execute("ALTER TABLE account_stats ADD COLUMN bangumi INTEGER")
         conn.execute("ALTER TABLE account_stats ADD COLUMN drama INTEGER")
+    if acols and "face" not in acols:
+        conn.execute("ALTER TABLE account_stats ADD COLUMN face TEXT")
+        conn.execute("ALTER TABLE account_stats ADD COLUMN sign TEXT")
+        conn.execute("ALTER TABLE account_stats ADD COLUMN current_exp INTEGER")
+        conn.execute("ALTER TABLE account_stats ADD COLUMN current_min INTEGER")
+        conn.execute("ALTER TABLE account_stats ADD COLUMN next_exp INTEGER")

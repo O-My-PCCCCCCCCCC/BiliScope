@@ -124,8 +124,16 @@ def sync_account(conn: sqlite3.Connection, client: BiliClient, uid: int) -> dict
     """采集账号信息：硬币、等级、关注/粉丝、追番/追剧订阅、硬币明细。"""
     nav = client.get_json("/x/web-interface/nav")["data"]
     coins = nav.get("money", 0)
-    level = (nav.get("level_info") or {}).get("current_level", 0)
+    li = nav.get("level_info") or {}
+    level = li.get("current_level", 0)
     uname = nav.get("uname", "")
+    face = nav.get("face", "")
+    sign = ""
+    try:
+        info = client.get_wbi_json("/x/space/wbi/acc/info", {"mid": uid})
+        sign = (info.get("data") or {}).get("sign", "") or ""
+    except Exception:
+        pass
     following = conn.execute("SELECT COUNT(*) FROM followings").fetchone()[0]
     follower = 0
     try:
@@ -138,8 +146,11 @@ def sync_account(conn: sqlite3.Connection, client: BiliClient, uid: int) -> dict
     bangumi = _bangumi_total(client, uid, 1)  # 追番
     drama = _bangumi_total(client, uid, 2)    # 追剧
     conn.execute(
-        "INSERT INTO account_stats (coins, level, following, follower, bangumi, drama, uname, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (coins, level, following, follower, bangumi, drama, uname, int(time.time())),
+        """INSERT INTO account_stats
+           (coins, level, following, follower, bangumi, drama, uname, face, sign, current_exp, current_min, next_exp, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (coins, level, following, follower, bangumi, drama, uname, face, sign,
+         li.get("current_exp"), li.get("current_min"), li.get("next_exp"), int(time.time())),
     )
     n_coins = sync_coin_log(conn, client)
     conn.commit()
