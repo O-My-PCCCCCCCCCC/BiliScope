@@ -238,3 +238,14 @@ provider 与模型由用户在设置页选择；openai provider 的 base_url 填
 - 已分析视频去重（`analyzed_at`），重跑不重复扣费
 - 分析范围可配置（默认最近 N 条，避免一次性全量造成高额费用）
 - Claude 默认 `claude-haiku-4-5`（此类短文本打标签足够、成本低），用户可按需切 `claude-opus-5`
+
+### 本地模型自动推荐（2026-08-12 追加）
+
+用户希望**根据本机硬件配置自动选择本地可跑动的 AI 模型**（Ollama 部署）。
+
+- `app/hardware.py`：检测 CPU 核数、内存、GPU 及显存（NVIDIA 用 `nvidia-smi` / `pynvml`，其余尽力而为）
+- 推荐算法：按「显存 → 内存 → CPU」优先级选 Ollama 模型
+  - 无 GPU（纯 CPU 推理）：按内存选 `qwen2.5:0.5b / 1.5b / 3b / 7b`
+  - 有 GPU：按显存选 `qwen2.5:1.5b(≤4G) / 7b(4-8G) / 14b(8-12G) / 32b(16G+)`
+- 设置页「检测硬件并推荐」：展示硬件信息 + 推荐模型 → 一键 `ollama pull <model>` 拉取 → 设为默认 provider
+- 依赖：`psutil`、`nvidia-ml-py`（可选，无 GPU 可不装）；前提用户本机装有 Ollama
