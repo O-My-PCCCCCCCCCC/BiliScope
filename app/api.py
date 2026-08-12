@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from app.analyze import aggregate_themes, analysis_stats, analyze_unanalyzed
 from app.bilibili import login as login_mod
-from app.bilibili.client import BiliError
+from app.bilibili.client import BiliError, UA
 from app.config import get_cookies, load_config, save_config
 from app.database import get_conn, init_db
 from app.hardware import detect_hardware, recommend_ollama_model
@@ -289,11 +289,45 @@ def analysis_status() -> dict:
         conn.close()
 
 
+@router.get("/account")
+def account_info() -> dict:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        row = conn.execute(
+            "SELECT * FROM account_stats ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        logs = conn.execute(
+            "SELECT * FROM coin_log ORDER BY id DESC LIMIT 100"
+        ).fetchall()
+    finally:
+        conn.close()
+    return {"stats": dict(row) if row else None,
+            "coin_log": [dict(r) for r in logs]}
+
+
 @router.get("/hardware")
 def hardware() -> dict:
     hw = detect_hardware()
     hw["recommended_model"] = recommend_ollama_model(hw)
     return hw
+
+
+@router.get("/img")
+def img_proxy(url: str = Query(...)) -> Response:
+    """图片代理：B 站 CDN 防盗链，需带 bilibili Referer 抓取。"""
+    if "hdslb.com" not in url:
+        raise HTTPException(status_code=400, detail="非法图片地址")
+    import httpx
+    resp = httpx.get(
+        url,
+        headers={"Referer": "https://www.bilibili.com/", "User-Agent": UA},
+        timeout=15,
+    )
+    return Response(
+        content=resp.content,
+        media_type=resp.headers.get("content-type", "image/jpeg"),
+    )
 
 
 @router.post("/sync")

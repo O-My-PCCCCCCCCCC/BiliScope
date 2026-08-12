@@ -61,6 +61,26 @@ def test_sync_favorites_and_followings(tmp_path):
     conn.close()
 
 
+def test_sync_coin_log_dedup(tmp_path):
+    from app.sync import sync_coin_log
+
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+
+    class FakeClient:
+        def get_json(self, path, params=None):
+            return {"code": 0, "data": {"list": [
+                {"time": "2026-08-12 18:00:00", "delta": -1.0, "reason": "投币视频 BV1"},
+            ]}}
+
+    n = sync_coin_log(conn, FakeClient())  # type: ignore
+    assert n == 1
+    n = sync_coin_log(conn, FakeClient())  # type: ignore
+    assert n == 0  # 去重
+    conn.close()
+
+
 def test_run_full_sync_requires_login(tmp_path, monkeypatch):
     config.set_config_path(tmp_path / "config.json")
     monkeypatch.setattr(config, "get_cookies", lambda: {})

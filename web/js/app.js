@@ -7,6 +7,9 @@ async function api(path, options = {}) {
   return data;
 }
 
+// B 站 CDN 防盗链，统一走后端图片代理
+const imgUrl = u => u ? '/api/img?url=' + encodeURIComponent(u) : '';
+
 const Analysis = {
   template: `
     <h2>内容分析</h2>
@@ -206,7 +209,7 @@ const History = {
     <div class="bili-grid" v-loading="loading">
       <div class="bili-card" v-for="it in items" :key="it.bvid" @click="open(it)">
         <div class="bili-cover">
-          <img :src="it.pic" loading="lazy" :alt="it.title"/>
+          <img :src="imgUrl(it.pic)" loading="lazy" :alt="it.title"/>
           <span class="bili-duration">{{ fmtDur(it.duration) }}</span>
         </div>
         <div class="bili-title">{{ it.title }}</div>
@@ -249,7 +252,7 @@ const History = {
       return new Date(ts * 1000).toLocaleDateString('zh-CN');
     }
     onMounted(() => load(1));
-    return { search, items, total, page, pageSize, loading, load, open, fmtNum, fmtDur, timeAgo };
+    return { search, items, total, page, pageSize, loading, load, open, imgUrl, fmtNum, fmtDur, timeAgo };
   },
 };
 
@@ -268,7 +271,7 @@ const Favorites = {
       <div class="bili-grid" v-loading="loading">
         <div class="bili-card" v-for="it in items" :key="it.bvid" @click="openVideo(it)">
           <div class="bili-cover">
-            <img v-if="it.title" :src="it.pic" loading="lazy" :alt="it.title"/>
+            <img v-if="it.title" :src="imgUrl(it.pic)" loading="lazy" :alt="it.title"/>
             <el-tag v-else type="danger" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">已失效</el-tag>
             <span v-if="it.title" class="bili-duration">{{ fmtDur(it.duration) }}</span>
           </div>
@@ -284,6 +287,7 @@ const Favorites = {
   setup() {
     const folders = ref([]); const items = ref([]); const current = ref(null);
     const dialog = ref(false); const loading = ref(false);
+    const fmt = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN') : '';
     async function loadFolders() {
       folders.value = await api('/favorites');
     }
@@ -308,7 +312,7 @@ const Favorites = {
       return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
     }
     onMounted(loadFolders);
-    return { folders, items, current, dialog, loading, open, openVideo, fmtNum, fmtDur };
+    return { folders, items, current, dialog, loading, fmt, open, openVideo, imgUrl, fmtNum, fmtDur };
   },
 };
 
@@ -322,6 +326,22 @@ const Settings = {
       <div v-if="status.logged_in">
         <p>已登录 <el-tag type="success">UID {{ status.uid || '-' }}</el-tag></p>
         <p v-if="status.login_at" style="margin-top:8px">登录时间：{{ fmt(status.login_at) }}</p>
+        <template v-if="account.stats">
+          <el-divider/>
+          <el-descriptions :column="2" size="small">
+            <el-descriptions-item label="硬币">{{ account.stats.coins }}</el-descriptions-item>
+            <el-descriptions-item label="等级">Lv.{{ account.stats.level }}</el-descriptions-item>
+            <el-descriptions-item label="关注">{{ account.stats.following }}</el-descriptions-item>
+            <el-descriptions-item label="粉丝">{{ account.stats.follower }}</el-descriptions-item>
+          </el-descriptions>
+          <el-divider/>
+          <div style="font-size:13px;color:#999;margin-bottom:8px">硬币明细（{{ account.coin_log.length }} 条）</div>
+          <el-table :data="account.coin_log" size="small" max-height="240" style="width:100%">
+            <el-table-column prop="time" label="时间" width="150"/>
+            <el-table-column prop="delta" label="变动" width="70"/>
+            <el-table-column prop="reason" label="原因" min-width="220"/>
+          </el-table>
+        </template>
       </div>
       <p v-else>尚未登录，点击下方按钮扫码登录 B 站账号。</p>
       <div style="margin-top:16px">
@@ -446,8 +466,12 @@ const Settings = {
     }
     const llm = ref({ provider: 'ollama', api_key: '', base_url: '', model: '' });
     const hwLoading = ref(false); const hwModel = ref('');
-    onMounted(() => { loadConfig().catch(() => {}); });
-    return { qrVisible, qrMsg, syncing, smtp, testing, llm, hwLoading, hwModel,
+    const account = ref({ stats: null, coin_log: [] });
+    async function loadAccount() {
+      try { account.value = await api('/account'); } catch (e) {}
+    }
+    onMounted(() => { loadConfig().catch(() => {}); loadAccount(); });
+    return { qrVisible, qrMsg, syncing, smtp, testing, llm, hwLoading, hwModel, account,
              fmt, openQr, stopPoll, sync, saveSmtp, testEmail, saveLlm, recommendLocal };
   },
 };

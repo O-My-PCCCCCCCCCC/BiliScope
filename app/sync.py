@@ -89,6 +89,51 @@ def sync_descriptions(conn: sqlite3.Connection, client: BiliClient,
     return n
 
 
+def sync_coin_log(conn: sqlite3.Connection, client: BiliClient,
+                  max_pages: int = 5) -> int:
+    """拉取硬币明细（投币记录）。返回新增条数。"""
+    n = 0
+    for page in range(1, max_pages + 1):
+        data = client.get_json("/x/member/web/coin/log", {"page": page})
+        items = (data.get("data") or {}).get("list") or []
+        if not items:
+            break
+        for it in items:
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO coin_log (time, delta, reason) VALUES (?, ?, ?)",
+                (it.get("time"), it.get("delta"), it.get("reason")),
+            )
+            n += cur.rowcount
+        if len(items) < 20:
+            break
+    return n
+
+
+def sync_account(conn: sqlite3.Connection, client: BiliClient, uid: int) -> dict:
+    """采集账号信息：硬币余额、等级、关注/粉丝、硬币明细。"""
+    nav = client.get_json("/x/web-interface/nav")["data"]
+    coins = nav.get("money", 0)
+    level = (nav.get("level_info") or {}).get("current_level", 0)
+    uname = nav.get("uname", "")
+    following = conn.execute("SELECT COUNT(*) FROM followings").fetchone()[0]
+    follower = 0
+    try:
+        rel = client.get_json("/x/relation/stat", {"vmid": uid})
+        stat = rel.get("data") or {}
+        follower = stat.get("follower", 0)
+        following = stat.get("following", following)
+    except Exception:
+        pass
+    conn.execute(
+        "INSERT INTO account_stats (coins, level, following, follower, uname, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (coins, level, following, follower, uname, int(time.time())),
+    )
+    n_coins = sync_coin_log(conn, client)
+    conn.commit()
+    return {"coins": coins, "level": level, "following": following,
+            "follower": follower, "coin_log": n_coins}
+
+
 def run_full_sync(client: BiliClient | None = None) -> dict:
     """执行完整同步，返回各数据源的新增条数。未登录抛 BiliError。"""
     from app.database import get_conn, init_db
@@ -107,12 +152,14 @@ def run_full_sync(client: BiliClient | None = None) -> dict:
         n_hist = sync_history(conn, client)
         n_fav = sync_favorites(conn, client, uid) if uid else 0
         n_fol = sync_followings(conn, client, uid) if uid else 0
+        account = sync_account(conn, client, uid) if uid else {}
         if uid:
             cfg = load_config()
             cfg["uid"] = uid
             save_config(cfg)
         conn.commit()
-        return {"history": n_hist, "favorites": n_fav, "followings": n_fol}
+        return {"history": n_hist, "favorites": n_fav, "followings": n_fol,
+                "coins": account.get("coins", 0), "coin_log": account.get("coin_log", 0)}
     finally:
         conn.close()
         if own and client is not None:

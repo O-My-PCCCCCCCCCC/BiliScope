@@ -86,6 +86,22 @@ CREATE TABLE IF NOT EXISTS video_analysis (
     analyzed_at INTEGER,
     model TEXT
 );
+CREATE TABLE IF NOT EXISTS account_stats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    coins REAL,
+    level INTEGER,
+    following INTEGER,
+    follower INTEGER,
+    uname TEXT,
+    updated_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS coin_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    time TEXT,
+    delta REAL,
+    reason TEXT,
+    UNIQUE(time, delta, reason)
+);
 """
 
 
