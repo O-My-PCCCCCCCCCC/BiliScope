@@ -73,6 +73,81 @@ const Overview = {
   },
 };
 
+const Monitor = {
+  props: ['status'],
+  emits: ['refresh'],
+  template: `
+    <h2>监测中心</h2>
+    <div style="margin-bottom:12px">
+      <el-button type="primary" @click="run" :loading="running">立即检测</el-button>
+      <el-tag v-if="result" style="margin-left:8px">失效 {{ result.invalid }} · UP更新 {{ result.updates }}</el-tag>
+    </div>
+    <el-tabs v-model="tab">
+      <el-tab-pane label="提醒" name="alerts">
+        <el-table :data="alerts" style="width:100%">
+          <el-table-column prop="title" label="标题" min-width="160"/>
+          <el-table-column prop="content" label="内容" min-width="260"/>
+          <el-table-column label="时间" width="180">
+            <template #default="s">{{ fmt(s.row.created_at) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="100">
+            <template #default="s">
+              <el-button v-if="!s.row.read" size="small" @click="markRead(s.row.id)">标为已读</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+      <el-tab-pane label="失效视频" name="invalid">
+        <el-table :data="invalidList" style="width:100%">
+          <el-table-column prop="bvid" label="BV号" width="180"/>
+          <el-table-column prop="source" label="来源" width="100"/>
+          <el-table-column label="检测时间" width="180">
+            <template #default="s">{{ fmt(s.row.checked_at) }}</template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+      <el-tab-pane label="UP主更新" name="updates">
+        <el-table :data="updates" style="width:100%">
+          <el-table-column prop="uname" label="UP主" width="160"/>
+          <el-table-column prop="last_bvid" label="最新投稿" width="180"/>
+          <el-table-column label="发布时间" width="180">
+            <template #default="s">{{ fmt(s.row.last_pubdate) }}</template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+    </el-tabs>
+  `,
+  emits: ['refresh'],
+  setup(props, { emit }) {
+    const tab = ref('alerts');
+    const alerts = ref([]); const invalidList = ref([]); const updates = ref([]);
+    const running = ref(false); const result = ref(null);
+    const fmt = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN') : '';
+    async function loadAll() {
+      const d = await api('/alerts');
+      alerts.value = d.items;
+      invalidList.value = await api('/monitor/invalid');
+      updates.value = await api('/monitor/updates');
+    }
+    async function run() {
+      running.value = true;
+      try {
+        result.value = await api('/monitor/run', { method: 'POST' });
+        await loadAll();
+        emit('refresh');
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+      finally { running.value = false; }
+    }
+    async function markRead(id) {
+      await api(`/alerts/${id}/read`, { method: 'POST' });
+      await loadAll();
+      emit('refresh');
+    }
+    onMounted(() => loadAll().catch(() => {}));
+    return { tab, alerts, invalidList, updates, running, result, fmt, run, markRead };
+  },
+};
+
 const History = {
   template: `
     <h2>观看历史</h2>
@@ -224,7 +299,7 @@ const Settings = {
 };
 
 const App = {
-  components: { Overview, History, Favorites, Settings },
+  components: { Overview, History, Favorites, Monitor, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
@@ -233,6 +308,7 @@ const App = {
           <el-menu-item index="overview"><el-icon><DataLine/></el-icon>概览</el-menu-item>
           <el-menu-item index="history"><el-icon><Clock/></el-icon>观看历史</el-menu-item>
           <el-menu-item index="favorites"><el-icon><Star/></el-icon>收藏夹</el-menu-item>
+          <el-menu-item index="monitor"><el-icon><Bell/></el-icon>监测中心<el-badge :value="status.alerts_unread || 0" :hidden="!(status.alerts_unread)" class="menu-badge"/></el-menu-item>
           <el-menu-item index="settings"><el-icon><Setting/></el-icon>设置</el-menu-item>
         </el-menu>
         <div class="sync-status">
@@ -245,6 +321,7 @@ const App = {
         <Overview v-if="route === 'overview'" :status="status" @refresh="loadStatus"/>
         <History v-else-if="route === 'history'"/>
         <Favorites v-else-if="route === 'favorites'"/>
+        <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
         <Settings v-else-if="route === 'settings'" :status="status" @refresh="loadStatus"/>
       </el-main>
     </el-container>

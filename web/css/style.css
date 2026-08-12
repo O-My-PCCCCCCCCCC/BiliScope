@@ -14,3 +14,4 @@ body { background: #141414; color: #e5e5e5; font-family: 'Microsoft YaHei', sans
 .fav-count { color: #999; font-size: 12px; margin-top: 6px; }
 h2 { margin: 8px 0 16px; font-size: 20px; }
 .cards .el-card { margin-bottom: 16px; }
+.menu .menu-badge { margin-left: 10px; }
