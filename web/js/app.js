@@ -1120,17 +1120,6 @@ const App = {
     <el-container class="layout">
       <el-aside width="220px" class="aside">
         <div class="logo">BiliScope</div>
-        <div class="account-card" v-if="status.logged_in && accountInfo.stats">
-          <img :src="imgUrl(accountInfo.stats.face)" class="account-avatar" alt="头像"/>
-          <div class="account-info">
-            <div class="account-name">{{ accountInfo.stats.uname }}</div>
-            <div class="account-uid">UID {{ status.uid }}</div>
-            <div class="account-lv">Lv.{{ accountInfo.stats.level }}
-              <el-progress :percentage="lvPct" :show-text="false" :stroke-width="5" style="margin-top:3px"/>
-            </div>
-            <div class="account-lv-pred">{{ accountInfo.stats.lv_prediction?.text }}</div>
-          </div>
-        </div>
         <el-menu :default-active="route" @select="route = $event" class="menu">
           <el-menu-item index="overview"><el-icon><DataLine/></el-icon>概览</el-menu-item>
           <el-menu-item index="content"><el-icon><FolderOpened/></el-icon>内容浏览</el-menu-item>
@@ -1140,7 +1129,18 @@ const App = {
           <el-menu-item index="chat"><el-icon><ChatDotRound/></el-icon>AI 助手</el-menu-item>
           <el-menu-item index="settings"><el-icon><Setting/></el-icon>设置</el-menu-item>
         </el-menu>
-        <div class="sync-status">
+        <div class="account-card" v-if="status.logged_in && accountInfo.stats">
+          <img :src="imgUrl(accountInfo.stats.face)" class="account-avatar" alt="头像"/>
+          <div class="account-info">
+            <div class="account-name">{{ accountInfo.stats.uname }}</div>
+            <div class="account-uid">UID {{ status.uid }}</div>
+            <div class="account-lv">Lv.{{ accountInfo.stats.level }}
+              <el-progress :percentage="lvPct" :show-text="false" :stroke-width="4" style="margin-top:3px"/>
+            </div>
+            <div class="account-lv-pred">{{ accountInfo.stats.lv_prediction?.text }}</div>
+          </div>
+        </div>
+        <div class="sync-status" v-else>
           <el-tag :type="status.logged_in ? 'success' : 'danger'" size="small">
             {{ status.logged_in ? '已登录' : '未登录' }}
           </el-tag>
