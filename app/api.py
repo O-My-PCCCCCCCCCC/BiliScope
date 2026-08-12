@@ -487,6 +487,60 @@ def favorites() -> list:
     return [dict(r) for r in rows]
 
 
+@router.get("/dynamics")
+def dynamics_list() -> list:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM dynamics ORDER BY ctime DESC LIMIT 200"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+@router.get("/analysis/deep")
+def analysis_deep() -> dict:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        duration = [dict(r) for r in conn.execute(
+            """SELECT CASE WHEN v.duration < 300 THEN '<5分钟'
+                           WHEN v.duration < 900 THEN '5-15分钟'
+                           WHEN v.duration < 1800 THEN '15-30分钟'
+                           WHEN v.duration < 3600 THEN '30-60分钟'
+                           ELSE '>60分钟' END AS bucket, COUNT(*) AS n
+               FROM history h JOIN videos v ON h.bvid = v.bvid
+               WHERE v.duration > 0
+               GROUP BY bucket"""
+        ).fetchall()]
+        weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+        weekday = [dict(r) for r in conn.execute(
+            """SELECT CAST(strftime('%w', view_at, 'unixepoch', 'localtime') AS INTEGER) AS w,
+                      COUNT(*) AS n FROM history GROUP BY w"""
+        ).fetchall()]
+        up_watch = [dict(r) for r in conn.execute(
+            """SELECT v.up_name, COUNT(*) AS cnt, SUM(v.duration) AS total_sec
+               FROM history h JOIN videos v ON h.bvid = v.bvid
+               WHERE v.up_name != '' AND v.duration > 0
+               GROUP BY v.up_name ORDER BY total_sec DESC LIMIT 10"""
+        ).fetchall()]
+        graveyard = conn.execute(
+            """SELECT COUNT(*) FROM fav_items f
+               WHERE f.bvid NOT IN (SELECT bvid FROM history)"""
+        ).fetchone()[0]
+        total_fav = conn.execute("SELECT COUNT(*) FROM fav_items").fetchone()[0]
+    finally:
+        conn.close()
+    return {
+        "duration": duration,
+        "weekday": [{"w": weekdays[r["w"]], "n": r["n"]} for r in weekday],
+        "up_watch": up_watch,
+        "graveyard": {"count": graveyard, "total": total_fav},
+    }
+
+
 @router.get("/collections")
 def collections() -> list:
     conn = get_conn()

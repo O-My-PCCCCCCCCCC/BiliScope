@@ -148,6 +148,23 @@ def sync_account(conn: sqlite3.Connection, client: BiliClient, uid: int) -> dict
             "coin_log": n_coins}
 
 
+def sync_dynamics(conn: sqlite3.Connection, client: BiliClient, uid: int) -> int:
+    """采集自己的动态。返回新增条数。"""
+    from app import dynamics as dynamics_mod
+    rows = dynamics_mod.fetch_dynamics(client, uid)
+    n = 0
+    now = int(time.time())
+    for d in rows:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO dynamics (id, type, content, like_count, comment_count, repost_count, ctime, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (d["id"], d["type"], d["content"], d["like_count"],
+             d["comment_count"], d["repost_count"], d["ctime"], now),
+        )
+        n += cur.rowcount
+    conn.commit()
+    return n
+
+
 def sync_collections(conn: sqlite3.Connection, client: BiliClient, uid: int) -> int:
     """采集追的合集/系列。返回新增条数。"""
     data = client.get_json(
@@ -213,6 +230,7 @@ def run_full_sync(client: BiliClient | None = None) -> dict:
         n_desc = sync_descriptions(conn, client, limit=200)  # 补拉简介（内容分析用）
         n_col = sync_collections(conn, client, uid) if uid else 0
         n_cf = sync_collected_folders(conn, client, uid) if uid else 0
+        n_dyn = sync_dynamics(conn, client, uid) if uid else 0
         account = sync_account(conn, client, uid) if uid else {}
         if uid:
             cfg = load_config()
@@ -222,6 +240,7 @@ def run_full_sync(client: BiliClient | None = None) -> dict:
         return {"history": n_hist, "favorites": n_fav, "followings": n_fol,
                 "descriptions": n_desc,
                 "collections": n_col, "collected_folders": n_cf,
+                "dynamics": n_dyn,
                 "coins": account.get("coins", 0), "coin_log": account.get("coin_log", 0)}
     finally:
         conn.close()

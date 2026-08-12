@@ -14,6 +14,74 @@ const imgUrl = u => {
   return '/api/img?url=' + encodeURIComponent(src);
 };
 
+const Dynamics = {
+  template: `
+    <h2>我的动态</h2>
+    <el-table :data="items" style="width:100%">
+      <el-table-column label="时间" width="170">
+        <template #default="s">{{ fmt(s.row.ctime) }}</template>
+      </el-table-column>
+      <el-table-column label="类型" width="90">
+        <template #default="s"><el-tag size="small">{{ typeName(s.row.type) }}</el-tag></template>
+      </el-table-column>
+      <el-table-column prop="content" label="内容" min-width="300"/>
+      <el-table-column prop="like_count" label="点赞" width="70"/>
+      <el-table-column prop="comment_count" label="评论" width="70"/>
+      <el-table-column prop="repost_count" label="转发" width="70"/>
+    </el-table>
+  `,
+  setup() {
+    const items = ref([]);
+    const fmt = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN') : '';
+    const typeName = t => ({ AV: '视频', FORWARD: '转发', DRAW: '图文', WORD: '文字', DYNAMIC_TYPE_AV: '视频' }[t] || t);
+    onMounted(async () => { items.value = await api('/dynamics').catch(() => []); });
+    return { items, fmt, typeName };
+  },
+};
+
+const DeepAnalysis = {
+  template: `
+    <h2>深度分析</h2>
+    <el-row :gutter="16">
+      <el-col :span="8"><el-card><div class="card-num">{{ graveyard.count }}</div><div class="card-label">吃灰收藏（共 {{ graveyard.total }} 个，收藏了没看过）</div></el-card></el-col>
+      <el-col :span="8"><el-card><div data-dur class="chart"></div></el-card></el-col>
+      <el-col :span="8"><el-card><div data-week class="chart"></div></el-card></el-col>
+      <el-col :span="12"><el-card><div data-up class="chart"></div></el-card></el-col>
+    </el-row>
+  `,
+  setup() {
+    const graveyard = ref({ count: 0, total: 0 });
+    async function load() {
+      const d = await api('/analysis/deep').catch(() => null);
+      if (!d) return;
+      graveyard.value = d.graveyard;
+      nextTick(() => {
+        const mk = (sel, option) => {
+          const el = document.querySelector(sel);
+          if (el) echarts.init(el, 'dark').setOption(option);
+        };
+        mk('[data-dur]', {
+          title: { text: '观看时长分布', textStyle: { fontSize: 14 } }, tooltip: { trigger: 'item' },
+          series: [{ type: 'pie', data: d.duration.map(x => ({ name: x.bucket, value: x.n })) }],
+        });
+        mk('[data-week]', {
+          title: { text: '周几活跃度', textStyle: { fontSize: 14 } }, tooltip: {},
+          xAxis: { type: 'category', data: d.weekday.map(x => x.w) }, yAxis: { type: 'value' },
+          series: [{ type: 'bar', data: d.weekday.map(x => x.n) }],
+        });
+        mk('[data-up]', {
+          title: { text: 'UP主观看时长 TOP', textStyle: { fontSize: 14 } }, tooltip: { trigger: 'axis' },
+          xAxis: { type: 'category', data: d.up_watch.map(u => u.up_name), axisLabel: { rotate: 30 } },
+          yAxis: { type: 'value', name: '秒' },
+          series: [{ type: 'bar', data: d.up_watch.map(u => u.total_sec) }],
+        });
+      });
+    }
+    onMounted(load);
+    return { graveyard };
+  },
+};
+
 const Chat = {
   template: `
     <h2>AI 助手</h2>
@@ -759,7 +827,7 @@ const Settings = {
 };
 
 const App = {
-  components: { Overview, History, Favorites, Monitor, Analysis, Chat, Settings },
+  components: { Overview, History, Favorites, Monitor, Analysis, Dynamics, DeepAnalysis, Chat, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
@@ -770,6 +838,8 @@ const App = {
           <el-menu-item index="favorites"><el-icon><Star/></el-icon>收藏夹</el-menu-item>
           <el-menu-item index="monitor"><el-icon><Bell/></el-icon>监测中心<el-badge :value="status.alerts_unread || 0" :hidden="!(status.alerts_unread)" class="menu-badge"/></el-menu-item>
           <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>内容分析</el-menu-item>
+          <el-menu-item index="deep"><el-icon><TrendCharts/></el-icon>深度分析</el-menu-item>
+          <el-menu-item index="dynamics"><el-icon><Message/></el-icon>我的动态</el-menu-item>
           <el-menu-item index="chat"><el-icon><ChatDotRound/></el-icon>AI 助手</el-menu-item>
           <el-menu-item index="settings"><el-icon><Setting/></el-icon>设置</el-menu-item>
         </el-menu>
@@ -785,6 +855,8 @@ const App = {
         <Favorites v-else-if="route === 'favorites'"/>
         <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
         <Analysis v-else-if="route === 'analysis'"/>
+        <DeepAnalysis v-else-if="route === 'deep'"/>
+        <Dynamics v-else-if="route === 'dynamics'"/>
         <Chat v-else-if="route === 'chat'"/>
         <Settings v-else-if="route === 'settings'" :status="status" @refresh="loadStatus"/>
       </el-main>

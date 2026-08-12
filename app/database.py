@@ -131,6 +131,16 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     tool_call_id TEXT,
     created_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS dynamics (
+    id TEXT PRIMARY KEY,
+    type TEXT,
+    content TEXT,
+    like_count INTEGER,
+    comment_count INTEGER,
+    repost_count INTEGER,
+    ctime INTEGER,
+    updated_at INTEGER
+);
 """
 
 
