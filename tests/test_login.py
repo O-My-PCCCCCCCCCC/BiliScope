@@ -35,12 +35,14 @@ def test_poll_success_saves_cookies(tmp_path):
     from app import config
     config.set_config_path(tmp_path / "config.json")
 
+    # B 站真实格式：顶层 code 恒为 0，登录状态在 data.code
     def handler(request):
-        return httpx.Response(200, json={"code": 0, "data": {"url": "https://www.bilibili.com/"}},
-                              headers=[
-                                  ("set-cookie", "SESSDATA=abc; Path=/"),
-                                  ("set-cookie", "bili_jct=def; Path=/"),
-                              ])
+        return httpx.Response(200, json={"code": 0, "data": {
+            "code": 0, "url": "https://passport.bilibili.com/h5/login/success?access_key=x",
+        }}, headers=[
+            ("set-cookie", "SESSDATA=abc; Path=/"),
+            ("set-cookie", "bili_jct=def; Path=/"),
+        ])
 
     result = make_login(handler).poll("K")
     assert result["status"] == "ok"
@@ -49,16 +51,28 @@ def test_poll_success_saves_cookies(tmp_path):
     assert cookies["bili_jct"] == "def"
 
 
+def test_poll_not_scanned_is_pending(tmp_path):
+    from app import config
+    config.set_config_path(tmp_path / "config.json")
+
+    def handler(request):
+        return httpx.Response(200, json={"code": 0, "data": {"code": 86101, "message": "未扫码"}})
+
+    result = make_login(handler).poll("K")
+    assert result["status"] == "pending"
+    # 未扫码绝不能把空 cookie 存成已登录
+    assert load_config()["cookies"] == {}
+
+
 def test_poll_expired():
     def handler(request):
-        return httpx.Response(200, json={"code": 86038, "data": None})
+        return httpx.Response(200, json={"code": 0, "data": {"code": 86038, "message": "二维码已失效"}})
 
     assert make_login(handler).poll("K")["status"] == "expired"
 
 
-def test_poll_pending_and_scanned():
-    pending = make_login(lambda r: httpx.Response(200, json={"code": 86101, "data": None}))
-    assert pending.poll("K")["status"] == "pending"
+def test_poll_scanned_awaits_confirm():
+    def handler(request):
+        return httpx.Response(200, json={"code": 0, "data": {"code": 86090, "message": "已扫码待确认"}})
 
-    scanned = make_login(lambda r: httpx.Response(200, json={"code": 86090, "data": None}))
-    assert scanned.poll("K")["status"] == "scanned"
+    assert make_login(handler).poll("K")["status"] == "scanned"
