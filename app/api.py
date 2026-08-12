@@ -6,10 +6,13 @@ import time
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from app.analyze import aggregate_themes, analysis_stats, analyze_unanalyzed
 from app.bilibili import login as login_mod
 from app.bilibili.client import BiliError
 from app.config import get_cookies, load_config, save_config
 from app.database import get_conn, init_db
+from app.hardware import detect_hardware, recommend_ollama_model
+from app.llm import get_llm_client
 from app.monitor import check_invalid, check_updates
 from app.report import generate_report
 from app.sync import run_full_sync
@@ -228,6 +231,49 @@ def config_test_email() -> dict:
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"发送失败: {e}")
     return {"ok": True}
+
+
+@router.post("/analysis/run")
+def analysis_run(limit: int = Query(50, ge=1, le=200)) -> dict:
+    if not get_cookies():
+        raise HTTPException(status_code=401, detail="未登录，请先扫码登录")
+    llm_cfg = load_config().get("llm") or {}
+    if not llm_cfg.get("provider"):
+        raise HTTPException(status_code=400, detail="未配置 LLM，请先在设置中选择")
+    conn = get_conn()
+    init_db(conn)
+    try:
+        n = analyze_unanalyzed(conn, get_llm_client(llm_cfg), limit=limit)
+    finally:
+        conn.close()
+    return {"analyzed": n}
+
+
+@router.get("/analysis/themes")
+def analysis_themes() -> list:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return aggregate_themes(conn)
+    finally:
+        conn.close()
+
+
+@router.get("/analysis/status")
+def analysis_status() -> dict:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return analysis_stats(conn)
+    finally:
+        conn.close()
+
+
+@router.get("/hardware")
+def hardware() -> dict:
+    hw = detect_hardware()
+    hw["recommended_model"] = recommend_ollama_model(hw)
+    return hw
 
 
 @router.post("/sync")
