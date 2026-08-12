@@ -65,6 +65,28 @@ def sync_followings(conn: sqlite3.Connection, client: BiliClient, uid: int) -> i
     return len(rows)
 
 
+def sync_descriptions(conn: sqlite3.Connection, client: BiliClient,
+                      limit: int = 100, delay: float = 0.3) -> int:
+    """补拉视频简介（videos.desc）。返回更新的条数。"""
+    rows = conn.execute(
+        "SELECT bvid FROM videos WHERE desc IS NULL OR desc = '' LIMIT ?",
+        (limit,),
+    ).fetchall()
+    n = 0
+    for row in rows:
+        try:
+            data = client.get_json("/x/web-interface/view", {"bvid": row["bvid"]})
+            desc = data.get("data", {}).get("desc", "")
+            if desc:
+                conn.execute("UPDATE videos SET desc = ? WHERE bvid = ?", (desc, row["bvid"]))
+                n += 1
+        except BiliError:
+            continue
+        time.sleep(delay)
+    conn.commit()
+    return n
+
+
 def run_full_sync(client: BiliClient | None = None) -> dict:
     """执行完整同步，返回各数据源的新增条数。未登录抛 BiliError。"""
     from app.database import get_conn, init_db

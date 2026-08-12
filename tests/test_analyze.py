@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+from app import database
+from app.analyze import aggregate_themes, analysis_stats, analyze_unanalyzed
+from app.llm.base import VideoTags
+
+
+class FakeLLM:
+    def analyze_video(self, title, desc):
+        return VideoTags(tags=["科技"], summary=f"关于{title}")
+
+
+def test_sync_descriptions(tmp_path):
+    from app.sync import sync_descriptions
+
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    conn.execute("INSERT INTO videos (bvid, title) VALUES ('BV1', 'A')")
+    conn.commit()
+
+    class FakeClient:
+        def get_json(self, path, params=None):
+            return {"code": 0, "data": {"desc": "这是简介"}}
+
+    n = sync_descriptions(conn, FakeClient(), limit=10)
+    assert n == 1
+    assert conn.execute("SELECT desc FROM videos WHERE bvid='BV1'").fetchone()[0] == "这是简介"
+    conn.close()
+
+
+def test_analyze_unanalyzed(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    conn.execute("INSERT INTO videos (bvid, title, desc) VALUES ('BV1', 'A', '简介1')")
+    conn.execute("INSERT INTO videos (bvid, title, desc) VALUES ('BV2', 'B', '简介2')")
+    conn.commit()
+
+    n = analyze_unanalyzed(conn, FakeLLM(), limit=10)
+    assert n == 2
+    assert conn.execute("SELECT COUNT(*) FROM video_analysis").fetchone()[0] == 2
+
+    n2 = analyze_unanalyzed(conn, FakeLLM(), limit=10)
+    assert n2 == 0
+
+    stats = analysis_stats(conn)
+    assert stats["analyzed"] == 2 and stats["total"] == 2
+    conn.close()
+
+
+def test_aggregate_themes(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    conn.execute("INSERT INTO video_analysis (bvid, tags_json, summary) VALUES ('BV1', '[\"科技\",\"AI\"]', 'a')")
+    conn.execute("INSERT INTO video_analysis (bvid, tags_json, summary) VALUES ('BV2', '[\"科技\",\"游戏\"]', 'b')")
+    conn.commit()
+
+    themes = aggregate_themes(conn)
+    by_tag = {t["tag"]: t["n"] for t in themes}
+    assert by_tag["科技"] == 2
+    assert by_tag["AI"] == 1
+    conn.close()
