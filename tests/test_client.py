@@ -48,6 +48,10 @@ def test_cookies_attached():
         captured["cookie"] = request.headers.get("cookie", "")
         return httpx.Response(200, json={"code": 0, "data": {}})
 
-    make_client({"SESSDATA": "abc123"}).get_json("/x/web-interface/nav")
+    client = BiliClient(
+        cookies={"SESSDATA": "abc123"},
+        session=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    client.get_json("/x/web-interface/nav")
     assert "SESSDATA=abc123" in captured["cookie"]
-    assert "bilibili" in UA
+    assert "Chrome" in UA

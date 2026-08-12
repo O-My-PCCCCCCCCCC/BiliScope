@@ -23,6 +23,8 @@ class BiliClient:
             timeout=15.0,
             headers={"User-Agent": UA, "Referer": "https://www.bilibili.com/"},
         )
+        if not str(self.session.base_url):
+            self.session.base_url = BASE_URL
         if cookies:
             self.session.cookies.update(cookies)
 
