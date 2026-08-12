@@ -42,43 +42,91 @@ const Dynamics = {
 const DeepAnalysis = {
   template: `
     <h2>深度分析</h2>
+    <el-row :gutter="16" class="cards">
+      <el-col :span="4" v-for="s in profileCards" :key="s.label">
+        <el-card><div class="card-num">{{ s.value }}</div><div class="card-label">{{ s.label }}</div></el-card>
+      </el-col>
+    </el-row>
     <el-row :gutter="16">
-      <el-col :span="8"><el-card><div class="card-num">{{ graveyard.count }}</div><div class="card-label">吃灰收藏（共 {{ graveyard.total }} 个，收藏了没看过）</div></el-card></el-col>
+      <el-col :span="12"><el-card><div data-monthly class="chart"></div></el-card></el-col>
+      <el-col :span="12"><el-card><div data-favTname class="chart"></div></el-card></el-col>
       <el-col :span="8"><el-card><div data-dur class="chart"></div></el-card></el-col>
       <el-col :span="8"><el-card><div data-week class="chart"></div></el-card></el-col>
-      <el-col :span="12"><el-card><div data-up class="chart"></div></el-card></el-col>
+      <el-col :span="8"><el-card><div data-up class="chart"></div></el-card></el-col>
     </el-row>
+    <el-card style="margin-top:16px">
+      <template #header>吃灰收藏明细（{{ graveyardItems.length }} 个，收藏了从没看过）</template>
+      <el-table :data="graveyardItems" size="small" max-height="400" style="width:100%">
+        <el-table-column prop="title" label="标题" min-width="240"/>
+        <el-table-column prop="up_name" label="UP主" width="120"/>
+        <el-table-column prop="tname" label="分区" width="90"/>
+        <el-table-column label="收藏时间" width="160">
+          <template #default="s">{{ fmt(s.row.fav_time) }}</template>
+        </el-table-column>
+      </el-table>
+    </el-card>
   `,
   setup() {
-    const graveyard = ref({ count: 0, total: 0 });
+    const profile = ref({});
+    const graveyardItems = ref([]);
+    const fmt = ts => ts ? new Date(ts * 1000).toLocaleDateString('zh-CN') : '';
+    const profileCards = Vue.computed(() => {
+      const p = profile.value;
+      return [
+        { label: '总观看数', value: p.total_views ?? '-' },
+        { label: '总时长(小时)', value: p.total_duration_h ?? '-' },
+        { label: '活跃天数', value: p.active_days ?? '-' },
+        { label: '日均观看', value: p.avg_daily ?? '-' },
+        { label: '黄金时段', value: p.peak_hour ?? '-' },
+        { label: '最活跃周几', value: p.peak_weekday ?? '-' },
+      ];
+    });
     async function load() {
-      const d = await api('/analysis/deep').catch(() => null);
-      if (!d) return;
-      graveyard.value = d.graveyard;
+      const [profileData, monthly, favTnames, graveyard] = await Promise.all([
+        api('/analysis/profile'), api('/analysis/monthly'),
+        api('/analysis/fav-tnames'), api('/analysis/graveyard-list'),
+      ]).catch(() => [null, [], [], []]);
+      if (!profileData) return;
+      profile.value = profileData;
+      graveyardItems.value = graveyard;
       nextTick(() => {
         const mk = (sel, option) => {
           const el = document.querySelector(sel);
           if (el) echarts.init(el, 'dark').setOption(option);
         };
-        mk('[data-dur]', {
-          title: { text: '观看时长分布', textStyle: { fontSize: 14 } }, tooltip: { trigger: 'item' },
-          series: [{ type: 'pie', data: d.duration.map(x => ({ name: x.bucket, value: x.n })) }],
+        mk('[data-monthly]', {
+          title: { text: '月度观看趋势', textStyle: { fontSize: 14 } }, tooltip: { trigger: 'axis' },
+          xAxis: { type: 'category', data: monthly.map(x => x.ym) }, yAxis: { type: 'value' },
+          series: [{ type: 'line', smooth: true, areaStyle: {}, data: monthly.map(x => x.n) }],
         });
-        mk('[data-week]', {
-          title: { text: '周几活跃度', textStyle: { fontSize: 14 } }, tooltip: {},
-          xAxis: { type: 'category', data: d.weekday.map(x => x.w) }, yAxis: { type: 'value' },
-          series: [{ type: 'bar', data: d.weekday.map(x => x.n) }],
+        mk('[data-favTname]', {
+          title: { text: '收藏分区分布', textStyle: { fontSize: 14 } }, tooltip: { trigger: 'item' },
+          series: [{ type: 'pie', radius: '60%', data: favTnames.map(x => ({ name: x.tname, value: x.n })) }],
         });
-        mk('[data-up]', {
-          title: { text: 'UP主观看时长 TOP', textStyle: { fontSize: 14 } }, tooltip: { trigger: 'axis' },
-          xAxis: { type: 'category', data: d.up_watch.map(u => u.up_name), axisLabel: { rotate: 30 } },
-          yAxis: { type: 'value', name: '秒' },
-          series: [{ type: 'bar', data: d.up_watch.map(u => u.total_sec) }],
-        });
+        (async () => {
+          const dd = await api('/analysis/deep').catch(() => null);
+          if (dd) {
+            mk('[data-dur]', {
+              title: { text: '观看时长分布', textStyle: { fontSize: 14 } }, tooltip: { trigger: 'item' },
+              series: [{ type: 'pie', data: dd.duration.map(x => ({ name: x.bucket, value: x.n })) }],
+            });
+            mk('[data-week]', {
+              title: { text: '周几活跃度', textStyle: { fontSize: 14 } }, tooltip: {},
+              xAxis: { type: 'category', data: dd.weekday.map(x => x.w) }, yAxis: { type: 'value' },
+              series: [{ type: 'bar', data: dd.weekday.map(x => x.n) }],
+            });
+            mk('[data-up]', {
+              title: { text: 'UP主观看时长 TOP', textStyle: { fontSize: 14 } }, tooltip: { trigger: 'axis' },
+              xAxis: { type: 'category', data: dd.up_watch.map(u => u.up_name), axisLabel: { rotate: 30 } },
+              yAxis: { type: 'value', name: '秒' },
+              series: [{ type: 'bar', data: dd.up_watch.map(u => u.total_sec) }],
+            });
+          }
+        })();
       });
     }
     onMounted(load);
-    return { graveyard };
+    return { profile, profileCards, graveyardItems, fmt };
   },
 };
 
