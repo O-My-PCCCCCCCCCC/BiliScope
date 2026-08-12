@@ -1033,19 +1033,8 @@ const ContentBrowser = {
   setup() { const tab = ref('history'); return { tab }; },
 };
 
-const AnalysisHub = {
-  components: { Analysis, DeepAnalysis },
-  template: `
-    <el-tabs v-model="tab">
-      <el-tab-pane label="内容标签" name="tags"><Analysis/></el-tab-pane>
-      <el-tab-pane label="深度统计" name="deep"><DeepAnalysis/></el-tab-pane>
-    </el-tabs>
-  `,
-  setup() { const tab = ref('tags'); return { tab }; },
-};
-
 const App = {
-  components: { Overview, ContentBrowser, Monitor, AnalysisHub, Downloads, Chat, Settings },
+  components: { Overview, ContentBrowser, Monitor, Analysis, DeepAnalysis, Downloads, Chat, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
@@ -1054,7 +1043,7 @@ const App = {
           <el-menu-item index="overview"><el-icon><DataLine/></el-icon>概览</el-menu-item>
           <el-menu-item index="content"><el-icon><FolderOpened/></el-icon>内容浏览</el-menu-item>
           <el-menu-item index="monitor"><el-icon><Bell/></el-icon>监测中心<el-badge :value="status.alerts_unread || 0" :hidden="!(status.alerts_unread)" class="menu-badge"/></el-menu-item>
-          <el-menu-item index="analysis"><el-icon><TrendCharts/></el-icon>分析</el-menu-item>
+          <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>内容分析</el-menu-item>
           <el-menu-item index="downloads"><el-icon><Download/></el-icon>下载管理</el-menu-item>
           <el-menu-item index="chat"><el-icon><ChatDotRound/></el-icon>AI 助手</el-menu-item>
           <el-menu-item index="settings"><el-icon><Setting/></el-icon>设置</el-menu-item>
@@ -1066,10 +1055,13 @@ const App = {
         </div>
       </el-aside>
       <el-main>
-        <Overview v-if="route === 'overview'" :status="status" @refresh="loadStatus"/>
+        <template v-if="route === 'overview'">
+          <Overview :status="status" @refresh="loadStatus"/>
+          <DeepAnalysis/>
+        </template>
         <ContentBrowser v-else-if="route === 'content'"/>
         <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
-        <AnalysisHub v-else-if="route === 'analysis'"/>
+        <Analysis v-else-if="route === 'analysis'"/>
         <Downloads v-else-if="route === 'downloads'"/>
         <Chat v-else-if="route === 'chat'"/>
         <Settings v-else-if="route === 'settings'" :status="status" @refresh="loadStatus"/>
