@@ -71,3 +71,22 @@ def test_database_seeded_from_client():
     body = client.get("/api/status").json()
     assert body["counts"]["history"] == 1
     assert body["counts"]["favorites"] == 1
+
+
+def test_monitor_chain(tmp_path, monkeypatch):
+    import app.api as api_mod
+    config.save_cookies({"SESSDATA": "abc"})
+    monkeypatch.setattr(api_mod, "check_invalid", lambda conn, client, **kw: 1)
+    monkeypatch.setattr(api_mod, "check_updates", lambda conn, client, **kw: 0)
+
+    r = client.post("/api/monitor/run")
+    assert r.status_code == 200
+    assert r.json() == {"invalid": 1, "updates": 0}
+
+    # 写入一条提醒并确认未读数暴露到 status
+    from app.notify import add_alert
+    conn = database.get_conn()
+    add_alert(conn, "invalid", "失效", "BV1")
+    conn.commit()
+    conn.close()
+    assert client.get("/api/status").json()["alerts_unread"] == 1
