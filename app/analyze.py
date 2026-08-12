@@ -105,6 +105,91 @@ def graveyard_list(conn: sqlite3.Connection, limit: int = 100) -> list[dict]:
     ).fetchall()]
 
 
+def watch_completion(conn: sqlite3.Connection) -> list[dict]:
+    """观看完整度分布（进度/时长）。"""
+    return [dict(r) for r in conn.execute(
+        """SELECT CASE
+                  WHEN h.progress * 1.0 / v.duration >= 0.9 THEN '看完(90%+)'
+                  WHEN h.progress * 1.0 / v.duration >= 0.5 THEN '看大半(50-90%)'
+                  WHEN h.progress * 1.0 / v.duration >= 0.3 THEN '看一半(30-50%)'
+                  ELSE '只看开头(<30%)' END AS bucket, COUNT(*) AS n
+           FROM history h JOIN videos v ON h.bvid = v.bvid
+           WHERE v.duration > 0
+           GROUP BY bucket"""
+    ).fetchall()]
+
+
+def time_buckets(conn: sqlite3.Connection) -> list[dict]:
+    """时段细分：凌晨/上午/下午/晚上。"""
+    return [dict(r) for r in conn.execute(
+        """SELECT CASE
+                  WHEN hour >= 0 AND hour < 6 THEN '凌晨(0-6)'
+                  WHEN hour >= 6 AND hour < 12 THEN '上午(6-12)'
+                  WHEN hour >= 12 AND hour < 18 THEN '下午(12-18)'
+                  ELSE '晚上(18-24)' END AS bucket, COUNT(*) AS n
+           FROM (SELECT CAST(strftime('%H', view_at, 'unixepoch', 'localtime') AS INTEGER) AS hour
+                 FROM history) GROUP BY bucket"""
+    ).fetchall()]
+
+
+def up_depth(conn: sqlite3.Connection, limit: int = 15) -> list[dict]:
+    """UP主深度榜：次数、总时长、最近观看。"""
+    return [dict(r) for r in conn.execute(
+        """SELECT v.up_name, COUNT(*) AS views, SUM(v.duration) AS total_sec,
+                  MAX(h.view_at) AS last_view
+           FROM history h JOIN videos v ON h.bvid = v.bvid
+           WHERE v.up_name != '' AND v.duration > 0
+           GROUP BY v.up_name ORDER BY total_sec DESC LIMIT ?""",
+        (limit,),
+    ).fetchall()]
+
+
+def popularity(conn: sqlite3.Connection) -> list[dict]:
+    """热门 vs 小众：你观看的视频播放量分布。"""
+    return [dict(r) for r in conn.execute(
+        """SELECT CASE
+                  WHEN v.view_count < 10000 THEN '<1万(小众)'
+                  WHEN v.view_count < 100000 THEN '1-10万'
+                  WHEN v.view_count < 1000000 THEN '10-100万'
+                  ELSE '>100万(爆款)' END AS bucket, COUNT(*) AS n
+           FROM history h JOIN videos v ON h.bvid = v.bvid
+           WHERE v.view_count > 0 GROUP BY bucket"""
+    ).fetchall()]
+
+
+def weekday_weekend(conn: sqlite3.Connection) -> list[dict]:
+    """工作日 vs 周末观看。"""
+    return [dict(r) for r in conn.execute(
+        """SELECT CASE
+                  WHEN CAST(strftime('%w', view_at, 'unixepoch', 'localtime') AS INTEGER) IN (0, 6)
+                  THEN '周末' ELSE '工作日' END AS kind, COUNT(*) AS n
+           FROM history GROUP BY kind"""
+    ).fetchall()]
+
+
+def graveyard_by_tname(conn: sqlite3.Connection) -> list[dict]:
+    """各分区吃灰率（收藏了没看）。"""
+    return [dict(r) for r in conn.execute(
+        """SELECT v.tname,
+                  SUM(CASE WHEN f.bvid NOT IN (SELECT bvid FROM history) THEN 1 ELSE 0 END) AS graveyard,
+                  COUNT(*) AS total
+           FROM fav_items f JOIN videos v ON f.bvid = v.bvid
+           WHERE v.tname != ''
+           GROUP BY v.tname HAVING total > 0
+           ORDER BY graveyard DESC LIMIT 10"""
+    ).fetchall()]
+
+
+def daily_calendar(conn: sqlite3.Connection, days: int = 90) -> list[dict]:
+    """最近 N 天每日观看量（热力图数据）。"""
+    start = int(time.time()) - days * 86400
+    return [dict(r) for r in conn.execute(
+        """SELECT date(view_at, 'unixepoch', 'localtime') AS day, COUNT(*) AS n
+           FROM history WHERE view_at >= ? GROUP BY day""",
+        (start,),
+    ).fetchall()]
+
+
 def aggregate_themes(conn: sqlite3.Connection, limit: int = 20) -> list[dict]:
     rows = conn.execute("SELECT tags_json FROM video_analysis").fetchall()
     counter: dict[str, int] = {}

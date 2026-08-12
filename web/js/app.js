@@ -54,6 +54,42 @@ const DeepAnalysis = {
       <el-col :span="8"><el-card><div data-week class="chart"></div></el-card></el-col>
       <el-col :span="8"><el-card><div data-up class="chart"></div></el-card></el-col>
     </el-row>
+    <el-row :gutter="16" style="margin-top:16px">
+      <el-col :span="6"><el-card><div data-completion class="chart"></div></el-card></el-col>
+      <el-col :span="6"><el-card><div data-timebuckets class="chart"></div></el-card></el-col>
+      <el-col :span="6"><el-card><div data-popularity class="chart"></div></el-card></el-col>
+      <el-col :span="6"><el-card><div data-weekend class="chart"></div></el-card></el-col>
+    </el-row>
+    <el-card style="margin-top:16px">
+      <template #header>UP主深度榜（观看时长 TOP）</template>
+      <el-table :data="upDepth" size="small" max-height="300" style="width:100%">
+        <el-table-column prop="up_name" label="UP主" width="140"/>
+        <el-table-column prop="views" label="观看次数" width="90"/>
+        <el-table-column label="总时长" width="100">
+          <template #default="s">{{ (s.row.total_sec / 3600).toFixed(1) }} 小时</template>
+        </el-table-column>
+        <el-table-column label="最近观看" width="140">
+          <template #default="s">{{ timeAgo(s.row.last_view) }}</template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+    <el-card style="margin-top:16px">
+      <template #header>分区吃灰率（收藏了没看）</template>
+      <el-table :data="graveyardByTname" size="small" max-height="300" style="width:100%">
+        <el-table-column prop="tname" label="分区" width="120"/>
+        <el-table-column label="吃灰率" min-width="220">
+          <template #default="s">
+            <el-progress :percentage="Math.round(s.row.graveyard / s.row.total * 100)"/>
+          </template>
+        </el-table-column>
+        <el-table-column prop="graveyard" label="没看过" width="80"/>
+        <el-table-column prop="total" label="总收藏" width="80"/>
+      </el-table>
+    </el-card>
+    <el-card style="margin-top:16px">
+      <template #header>最近90天观看热力图</template>
+      <div data-calendar class="chart" style="height:170px"></div>
+    </el-card>
     <el-card style="margin-top:16px">
       <template #header>吃灰收藏明细（{{ graveyardItems.length }} 个，收藏了从没看过）</template>
       <el-table :data="graveyardItems" size="small" max-height="400" style="width:100%">
@@ -69,7 +105,15 @@ const DeepAnalysis = {
   setup() {
     const profile = ref({});
     const graveyardItems = ref([]);
+    const upDepth = ref([]); const graveyardByTname = ref([]);
     const fmt = ts => ts ? new Date(ts * 1000).toLocaleDateString('zh-CN') : '';
+    function timeAgo(ts) {
+      if (!ts) return '';
+      const diff = (Date.now() / 1000 - ts);
+      if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+      if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+      return new Date(ts * 1000).toLocaleDateString('zh-CN');
+    }
     const profileCards = Vue.computed(() => {
       const p = profile.value;
       return [
@@ -82,13 +126,16 @@ const DeepAnalysis = {
       ];
     });
     async function load() {
-      const [profileData, monthly, favTnames, graveyard] = await Promise.all([
+      const [profileData, monthly, favTnames, graveyard, detailed] = await Promise.all([
         api('/analysis/profile'), api('/analysis/monthly'),
         api('/analysis/fav-tnames'), api('/analysis/graveyard-list'),
-      ]).catch(() => [null, [], [], []]);
+        api('/analysis/detailed'),
+      ]).catch(() => [null, [], [], [], null]);
       if (!profileData) return;
       profile.value = profileData;
       graveyardItems.value = graveyard;
+      upDepth.value = detailed?.up_depth || [];
+      graveyardByTname.value = detailed?.graveyard_by_tname || [];
       nextTick(() => {
         const mk = (sel, option) => {
           const el = document.querySelector(sel);
@@ -123,10 +170,29 @@ const DeepAnalysis = {
             });
           }
         })();
+        // 详细分析
+        if (detailed) {
+          const pie = (data, sel, title) => mk(sel, {
+            title: { text: title, textStyle: { fontSize: 14 } }, tooltip: { trigger: 'item' },
+            series: [{ type: 'pie', data: data.map(x => ({ name: x.bucket || x.kind, value: x.n })) }],
+          });
+          pie(detailed.completion, '[data-completion]', '观看完整度');
+          pie(detailed.time_buckets, '[data-timebuckets]', '观看时段');
+          pie(detailed.popularity, '[data-popularity]', '热门 vs 小众');
+          pie(detailed.weekday_weekend, '[data-weekend]', '工作日 vs 周末');
+          mk('[data-calendar]', {
+            tooltip: {},
+            calendar: { range: 90, cellSize: ['auto', 14], left: 30, right: 20, top: 10 },
+            visualMap: { min: 0, max: 5, inRange: { color: ['#2a2a2a', '#fb7299'] },
+                         orient: 'horizontal', left: 'center', bottom: 0, text: ['多', '少'] },
+            series: [{ type: 'heatmap', coordinateSystem: 'calendar',
+                       data: detailed.calendar.map(d => [d.day, d.n]) }],
+          });
+        }
       });
     }
     onMounted(load);
-    return { profile, profileCards, graveyardItems, fmt };
+    return { profile, profileCards, graveyardItems, upDepth, graveyardByTname, fmt, timeAgo };
   },
 };
 

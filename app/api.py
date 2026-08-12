@@ -7,7 +7,9 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from app.analyze import (aggregate_themes, analysis_stats, analyze_unanalyzed,
-                         fav_tnames, graveyard_list, monthly_trend, watch_profile)
+                         daily_calendar, fav_tnames, graveyard_by_tname, graveyard_list,
+                         monthly_trend, popularity, time_buckets, up_depth,
+                         watch_completion, watch_profile, weekday_weekend)
 from app.bilibili import login as login_mod
 from app.bilibili.client import BiliError, UA
 from app.config import get_cookies, load_config, save_config
@@ -275,6 +277,24 @@ def analysis_run(limit: int = Query(50, ge=1, le=200)) -> dict:
     finally:
         conn.close()
     return {"analyzed": n}
+
+
+@router.get("/analysis/detailed")
+def analysis_detailed() -> dict:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return {
+            "completion": watch_completion(conn),
+            "time_buckets": time_buckets(conn),
+            "up_depth": up_depth(conn),
+            "popularity": popularity(conn),
+            "weekday_weekend": weekday_weekend(conn),
+            "graveyard_by_tname": graveyard_by_tname(conn),
+            "calendar": daily_calendar(conn),
+        }
+    finally:
+        conn.close()
 
 
 @router.get("/analysis/monthly")
