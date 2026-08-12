@@ -15,7 +15,9 @@ def start_scheduler() -> BackgroundScheduler:
     from app.bilibili.client import BiliClient
     from app.config import get_cookies
     from app.database import get_conn, init_db
+    from app.emailer import send_report_email
     from app.monitor import check_invalid, check_updates
+    from app.report import generate_report
     from app.sync import run_full_sync
 
 
@@ -53,9 +55,21 @@ def start_scheduler() -> BackgroundScheduler:
         except Exception:
             pass
 
+    def job_report(kind: str) -> None:
+        try:
+            conn = get_conn()
+            init_db(conn)
+            report = generate_report(conn, kind)
+            conn.close()
+            send_report_email(report)
+        except Exception:
+            pass
+
     _scheduler = BackgroundScheduler()
     _scheduler.add_job(job_sync, "cron", hour=3, minute=0, id="sync")
     _scheduler.add_job(job_invalid, "cron", hour=4, minute=0, id="invalid")
     _scheduler.add_job(job_updates, "interval", hours=6, id="updates")
+    _scheduler.add_job(lambda: job_report("weekly"), "cron", day_of_week="sun", hour=5, minute=0, id="report_weekly")
+    _scheduler.add_job(lambda: job_report("monthly"), "cron", day=1, hour=5, minute=0, id="report_monthly")
     _scheduler.start()
     return _scheduler

@@ -7,7 +7,7 @@ def test_scheduler_registers_jobs():
     sched = start_scheduler()
     try:
         jobs = {j.id for j in sched.get_jobs()}
-        assert {"sync", "invalid", "updates"} <= jobs
+        assert {"sync", "invalid", "updates", "report_weekly", "report_monthly"} <= jobs
     finally:
         sched.shutdown(wait=False)
 
