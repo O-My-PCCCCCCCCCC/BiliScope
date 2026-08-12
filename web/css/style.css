@@ -24,3 +24,12 @@ h2 { margin: 8px 0 16px; font-size: 20px; }
 .bili-title { font-size: 14px; color: #e5e5e5; line-height: 1.4; margin: 8px 0 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 39px; }
 .bili-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #999; }
 .bili-up { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 62%; }
+/* 收藏夹左右布局（官方样式） */
+.fav-layout { display: flex; gap: 20px; align-items: flex-start; }
+.fav-side { width: 200px; flex-shrink: 0; border-right: 1px solid #333; padding-right: 12px; }
+.fav-side-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 6px; cursor: pointer; color: #ccc; }
+.fav-side-item:hover { background: #242424; }
+.fav-side-item.active { background: #2a2a2a; color: #fb7299; font-weight: 600; }
+.fav-side-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fav-side-count { color: #999; font-size: 12px; }
+.fav-main { flex: 1; min-width: 0; }

@@ -259,46 +259,49 @@ const History = {
 const Favorites = {
   template: `
     <h2>收藏夹</h2>
-    <el-row :gutter="12">
-      <el-col :span="8" v-for="f in folders" :key="f.media_id">
-        <el-card @click="open(f)" style="margin-bottom:12px;cursor:pointer">
-          <div class="fav-name">{{ f.name }}</div>
-          <div class="fav-count">{{ f.count }} 个视频 · {{ fmt(f.created_at) }}</div>
-        </el-card>
-      </el-col>
-    </el-row>
-    <el-dialog v-model="dialog" :title="current?.name" width="80%">
-      <div class="bili-grid" v-loading="loading">
-        <div class="bili-card" v-for="it in items" :key="it.bvid" @click="openVideo(it)">
-          <div class="bili-cover">
-            <img v-if="it.title" :src="imgUrl(it.pic)" loading="lazy" :alt="it.title"/>
-            <el-tag v-else type="danger" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">已失效</el-tag>
-            <span v-if="it.title" class="bili-duration">{{ fmtDur(it.duration) }}</span>
-          </div>
-          <div class="bili-title">{{ it.title || '已失效视频' }}</div>
-          <div class="bili-meta">
-            <span class="bili-up">{{ it.up_name }}</span>
-            <span class="bili-stats">{{ fmtNum(it.view_count) }} 播放</span>
+    <div class="fav-layout">
+      <div class="fav-side">
+        <div v-for="f in folders" :key="f.media_id" class="fav-side-item"
+             :class="{ active: activeId === f.media_id }" @click="select(f)">
+          <span class="fav-side-name">{{ f.name }}</span>
+          <span class="fav-side-count">{{ f.count }}</span>
+        </div>
+      </div>
+      <div class="fav-main" v-loading="loading">
+        <div class="bili-grid">
+          <div class="bili-card" v-for="it in items" :key="it.bvid" @click="play(it)">
+            <div class="bili-cover">
+              <img v-if="it.title" :src="imgUrl(it.pic)" loading="lazy" :alt="it.title"/>
+              <el-tag v-else type="danger" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">已失效</el-tag>
+              <span v-if="it.title" class="bili-duration">{{ fmtDur(it.duration) }}</span>
+            </div>
+            <div class="bili-title">{{ it.title || '已失效视频' }}</div>
+            <div class="bili-meta">
+              <span class="bili-up">{{ it.up_name }}</span>
+              <span class="bili-stats">{{ fmtNum(it.view_count) }} 播放</span>
+            </div>
           </div>
         </div>
       </div>
-    </el-dialog>
+    </div>
   `,
   setup() {
-    const folders = ref([]); const items = ref([]); const current = ref(null);
-    const dialog = ref(false); const loading = ref(false);
-    const fmt = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN') : '';
+    const folders = ref([]); const items = ref([]);
+    const activeId = ref(null); const loading = ref(false);
     async function loadFolders() {
       folders.value = await api('/favorites');
+      if (folders.value.length && activeId.value == null) {
+        select(folders.value[0]);
+      }
     }
-    async function open(f) {
-      current.value = f; dialog.value = true; loading.value = true;
+    async function select(f) {
+      activeId.value = f.media_id; loading.value = true;
       try {
         const d = await api(`/favorites/${f.media_id}?page_size=200`);
         items.value = d.items;
       } finally { loading.value = false; }
     }
-    function openVideo(it) {
+    function play(it) {
       if (it.title) window.open(`https://www.bilibili.com/video/${it.bvid}`, '_blank');
     }
     function fmtNum(n) {
@@ -312,7 +315,7 @@ const Favorites = {
       return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
     }
     onMounted(loadFolders);
-    return { folders, items, current, dialog, loading, fmt, open, openVideo, imgUrl, fmtNum, fmtDur };
+    return { folders, items, activeId, loading, select, play, imgUrl, fmtNum, fmtDur };
   },
 };
 

@@ -315,18 +315,42 @@ def hardware() -> dict:
 
 @router.get("/img")
 def img_proxy(url: str = Query(...)) -> Response:
-    """图片代理：B 站 CDN 防盗链，需带 bilibili Referer 抓取。"""
+    """图片代理：B 站 CDN 防盗链，带 bilibili Referer 抓取，磁盘缓存加速。"""
     if "hdslb.com" not in url:
         raise HTTPException(status_code=400, detail="非法图片地址")
+    import hashlib
     import httpx
-    resp = httpx.get(
-        url,
-        headers={"Referer": "https://www.bilibili.com/", "User-Agent": UA},
-        timeout=15,
-    )
+    from app.config import ROOT
+
+    cache_dir = ROOT / "data" / "img_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = hashlib.md5(url.encode()).hexdigest()
+    cache_path = cache_dir / f"{key}.img"
+
+    def _sniff_ct(b: bytes) -> str:
+        if b[:3] == b"\xff\xd8\xff":
+            return "image/jpeg"
+        if b[:8] == b"\x89PNG\r\n\x1a\n":
+            return "image/png"
+        if b[:4] == b"RIFF" and b[8:12] == b"WEBP":
+            return "image/webp"
+        return "image/jpeg"
+
+    if cache_path.exists():
+        content = cache_path.read_bytes()
+    else:
+        resp = httpx.get(
+            url,
+            headers={"Referer": "https://www.bilibili.com/", "User-Agent": UA},
+            timeout=15,
+        )
+        content = resp.content
+        if resp.status_code == 200 and content:
+            cache_path.write_bytes(content)
     return Response(
-        content=resp.content,
-        media_type=resp.headers.get("content-type", "image/jpeg"),
+        content=content,
+        media_type=_sniff_ct(content),
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 
