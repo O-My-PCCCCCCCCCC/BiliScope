@@ -111,6 +111,9 @@ const Analysis = {
       <el-button type="primary" @click="run" :loading="running">分析未分析视频</el-button>
       <el-tag style="margin-left:8px">已分析 {{ status.analyzed }} / {{ status.total }}</el-tag>
     </div>
+    <div v-if="!status.total" style="color:#e6a23c;font-size:12px;margin-bottom:12px">
+      ⚠️ 还没有可分析的视频：请先在设置页配置 LLM（Ollama/DeepSeek），再同步一次数据（同步时会补拉视频简介）
+    </div>
     <el-card>
       <template #header>观看内容主题分布</template>
       <div data-theme-chart class="chart"></div>
@@ -225,6 +228,9 @@ const Monitor = {
     <div style="margin-bottom:12px">
       <el-button type="primary" @click="run" :loading="running">立即检测</el-button>
       <el-tag v-if="result" style="margin-left:8px">失效 {{ result.invalid }} · UP更新 {{ result.updates }}</el-tag>
+    </div>
+    <div style="color:#999;font-size:12px;margin-bottom:12px">
+      首次检测需逐条请求 B 站（视频失效 + UP主投稿），可能耗时几分钟，请耐心等待
     </div>
     <el-tabs v-model="tab">
       <el-tab-pane label="提醒" name="alerts">

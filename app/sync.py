@@ -210,6 +210,7 @@ def run_full_sync(client: BiliClient | None = None) -> dict:
         n_hist = sync_history(conn, client)
         n_fav = sync_favorites(conn, client, uid) if uid else 0
         n_fol = sync_followings(conn, client, uid) if uid else 0
+        n_desc = sync_descriptions(conn, client, limit=200)  # 补拉简介（内容分析用）
         n_col = sync_collections(conn, client, uid) if uid else 0
         n_cf = sync_collected_folders(conn, client, uid) if uid else 0
         account = sync_account(conn, client, uid) if uid else {}
@@ -219,6 +220,7 @@ def run_full_sync(client: BiliClient | None = None) -> dict:
             save_config(cfg)
         conn.commit()
         return {"history": n_hist, "favorites": n_fav, "followings": n_fol,
+                "descriptions": n_desc,
                 "collections": n_col, "collected_folders": n_cf,
                 "coins": account.get("coins", 0), "coin_log": account.get("coin_log", 0)}
     finally:
