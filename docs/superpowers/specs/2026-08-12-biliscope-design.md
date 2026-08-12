@@ -179,7 +179,46 @@ python run.py
 
 ## 15. 里程碑划分
 
-- **M1（核心可用）**：项目骨架 + 登录 + 历史/收藏/关注采集 + SQLite + 概览页（基本图表）
+- **M1（核心可用）**：项目骨架 + 登录 + 历史/收藏/关注采集 + SQLite + 概览页（基本图表）✅
 - **M2（监测）**：失效检测 + UP 主更新 + 定时任务 + Web 提醒
 - **M3（报告与配置）**：周/月报 + 邮件通知 + 设置页完整化
-- **M4（打磨）**：数据分析页完善、测试补全、README、首版发布
+- **M4（内容分析）**：Claude API 分析视频内容，按主题标签分类并报告分布
+- **M5（打磨）**：数据分析页完善、测试补全、首版发布
+
+## 16. 内容分析（2026-08-12 新增，已确认）
+
+用户新增需求：**不只统计分区，还要理解每个视频讲了什么内容，按内容主题归类，报告哪类占多数。**
+
+**已确认方案：**
+- 引擎：Claude API（Anthropic）
+- 输入：每个视频的 **标题 + 简介**
+- 输出：每视频 3-5 个中文内容标签 + 一句话摘要
+
+**数据流程：**
+1. 补采简介：`/x/web-interface/view?bvid=` 返回 `desc`，写入 videos 表新增 `desc` 列（需迁移旧表）
+2. 批量分析：对未分析视频（`video_analysis` 中无记录）调 Claude API，生成标签+摘要
+3. 聚合：按标签统计主题分布
+4. 展示：仪表盘新增「内容分析」页 + 融入周/月报
+
+**新增表：**
+```sql
+CREATE TABLE IF NOT EXISTS video_analysis (
+    bvid TEXT PRIMARY KEY,
+    tags_json TEXT,
+    summary TEXT,
+    analyzed_at INTEGER,
+    model TEXT
+);
+```
+videos 表迁移：`ALTER TABLE videos ADD COLUMN desc TEXT`
+
+**配置（config.json）：**
+```json
+"claude": { "api_key": "", "model": "claude-opus-5" }
+```
+
+**技术要点：**
+- 官方 `anthropic` SDK + 结构化输出（`client.messages.parse()` + Pydantic），标签格式稳定可解析
+- 已分析视频去重（`analyzed_at`），重跑不重复扣费
+- 分析范围可配置（默认最近 N 条，避免一次性全量造成高额费用）
+- 模型可在 `claude-opus-5`（质量优先）与 `claude-haiku-4-5`（成本约 1/5，对短文本打标签足够）间切换，用户自选
