@@ -19,9 +19,13 @@ const Chat = {
     <h2>AI 助手</h2>
     <div class="chat-box" ref="chatBox">
       <div v-for="(m, i) in display" :key="i" class="chat-msg" :class="m.role">
-        <div class="chat-bubble" v-if="m.text">{{ m.text }}</div>
+        <div class="chat-avatar" v-if="m.role === 'assistant'">🤖</div>
+        <div class="chat-bubble" v-if="m.role === 'user'">{{ m.text }}</div>
+        <div class="chat-bubble md" v-else-if="m.role === 'assistant'" v-html="m.html"></div>
+        <div class="chat-bubble tool" v-else-if="m.role === 'tool'">{{ m.text }}</div>
       </div>
       <div v-if="thinking" class="chat-msg assistant">
+        <div class="chat-avatar">🤖</div>
         <div class="chat-bubble thinking">正在思考<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
       </div>
     </div>
@@ -41,11 +45,15 @@ const Chat = {
         buildDisplay();
       } catch (e) {}
     }
+    function renderMd(text) {
+      try { return DOMPurify.sanitize(marked.parse(text || '')); }
+      catch (e) { return text || ''; }
+    }
     function buildDisplay() {
       const out = [];
       for (const m of messages.value) {
         if (m.role === 'user') out.push({ role: 'user', text: m.content });
-        else if (m.role === 'assistant' && m.content) out.push({ role: 'assistant', text: m.content });
+        else if (m.role === 'assistant' && m.content) out.push({ role: 'assistant', html: renderMd(m.content) });
         else if (m.role === 'assistant' && m.tool_calls) {
           out.push({ role: 'tool', text: '🔧 调用：' + m.tool_calls.map(t => t.function.name).join('、') });
         } else if (m.role === 'tool') {
@@ -80,7 +88,7 @@ const Chat = {
         await loadHistory();
       } catch (e) {
         ElementPlus.ElMessage.error(e.message);
-        display.value.push({ role: 'assistant', text: '⚠️ ' + e.message });
+        display.value.push({ role: 'assistant', html: renderMd('⚠️ ' + e.message) });
       } finally {
         loading.value = false;
         thinking.value = false;

@@ -34,15 +34,19 @@ def test_run_chat_executes_tools(monkeypatch):
 
 
 def test_run_chat_preserves_tool_roundtrip():
-    # 验证 assistant.tool_calls 与 tool 消息按 OpenAI 风格回填
+    # 验证 assistant.tool_calls 与 tool 消息按 OpenAI 风格回填，且持久化到库
+    chat.reset_session()
     llm = FakeLLM([
         ChatResult(text="", tool_calls=[ToolCall(id="x1", name="create_folder", arguments={"title": "测试"})]),
         ChatResult(text="已创建", tool_calls=[]),
     ])
     result = chat.run_chat(llm, [], "新建一个叫测试的收藏夹")
-    assistant = [m for m in result["messages"] if m["role"] == "assistant"][0]
+    assert result["reply"] == "已创建"
+    history = chat.get_history()
+    assert history[0]["role"] == "user"  # 用户消息已持久化
+    assistant = [m for m in history if m["role"] == "assistant"][0]
     assert assistant["tool_calls"][0]["function"]["name"] == "create_folder"
-    tool_msg = [m for m in result["messages"] if m["role"] == "tool"]
+    tool_msg = [m for m in history if m["role"] == "tool"]
     assert tool_msg and tool_msg[0]["tool_call_id"] == "x1"
 
 

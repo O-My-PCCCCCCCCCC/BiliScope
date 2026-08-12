@@ -123,6 +123,14 @@ CREATE TABLE IF NOT EXISTS collected_folders (
     updated_at INTEGER,
     UNIQUE(media_id)
 );
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    role TEXT,
+    content TEXT,
+    tool_calls_json TEXT,
+    tool_call_id TEXT,
+    created_at INTEGER
+);
 """
 
 

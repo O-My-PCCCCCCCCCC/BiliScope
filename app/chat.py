@@ -1,14 +1,17 @@
-"""AI 聊天编排与工具调用循环。"""
+"""AI 聊天编排与工具调用循环（会话持久化到 SQLite）。"""
 from __future__ import annotations
 
 import json
+import re
+import time
 
 import app.favtools as favtools
+from app.database import get_conn, init_db
 from app.llm.base import LLMClient
 
 SYSTEM_PROMPT = (
-    "你是 BiliScope 的 AI 助手，帮助用户管理 B 站收藏夹。"
-    "你可以查看收藏夹和其中视频、新建/删除收藏夹、移动视频到别的收藏夹。"
+    "你是 BiliScope 的 AI 助手，帮助用户管理 B 站收藏夹、分析视频。"
+    "你可以查看收藏夹和其中视频、新建/删除收藏夹、移动视频、分析视频链接。"
     "用户让你整理收藏夹时，先看内容再操作，不要编造数据；回答简洁清楚，避免冗长点评。"
 )
 
@@ -35,6 +38,11 @@ TOOLS = [
         "description": "删除收藏夹", "parameters": {"type": "object", "properties": {
             "media_ids": {"type": "string", "description": "收藏夹 media_id，多个用逗号分隔"}},
             "required": ["media_ids"]}}},
+    {"type": "function", "function": {"name": "analyze_video",
+        "description": "分析一个 B 站视频链接，返回标题、UP主、简介、分区、播放量等",
+        "parameters": {"type": "object", "properties": {
+            "link": {"type": "string", "description": "B 站视频链接或 BV 号"}},
+            "required": ["link"]}}},
 ]
 
 TOOL_FUNCS = {
@@ -44,22 +52,46 @@ TOOL_FUNCS = {
     "delete_folder": lambda a: favtools.delete_folder(a.get("media_ids", "")),
     "move_fav_items": lambda a: favtools.move_fav_items(
         int(a.get("src_media_id", 0)), int(a.get("tar_media_id", 0)), a.get("bvids", [])),
+    "analyze_video": lambda a: favtools.analyze_video(a.get("link", "")),
 }
 
-# 会话（内存，单用户）
-_session: list[dict] = []
+
+def _persist(role: str, content: str = "", tool_calls: list | None = None,
+             tool_call_id: str | None = None) -> None:
+    conn = get_conn()
+    init_db(conn)
+    conn.execute(
+        "INSERT INTO chat_messages (role, content, tool_calls_json, tool_call_id, created_at) VALUES (?, ?, ?, ?, ?)",
+        (role, content,
+         json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None,
+         tool_call_id, int(time.time())),
+    )
+    conn.commit()
+    conn.close()
 
 
 def get_history() -> list[dict]:
-    return list(_session)
+    conn = get_conn()
+    init_db(conn)
+    rows = conn.execute("SELECT * FROM chat_messages ORDER BY id").fetchall()
+    conn.close()
+    msgs = []
+    for r in rows:
+        m: dict = {"role": r["role"], "content": r["content"] or ""}
+        if r["role"] == "assistant" and r["tool_calls_json"]:
+            m["tool_calls"] = json.loads(r["tool_calls_json"])
+        if r["role"] == "tool" and r["tool_call_id"]:
+            m["tool_call_id"] = r["tool_call_id"]
+        msgs.append(m)
+    return msgs
 
 
 def reset_session() -> None:
-    _session.clear()
-
-
-def set_history(messages: list[dict]) -> None:
-    _session[:] = messages
+    conn = get_conn()
+    init_db(conn)
+    conn.execute("DELETE FROM chat_messages")
+    conn.commit()
+    conn.close()
 
 
 def execute_tool(name: str, args: dict) -> str:
@@ -74,26 +106,27 @@ def execute_tool(name: str, args: dict) -> str:
 
 def run_chat(llm_client: LLMClient, history: list[dict], user_message: str,
              max_rounds: int = 6) -> dict:
-    messages = list(history)
+    _persist("user", user_message)
+    messages = list(history) + [{"role": "user", "content": user_message}]
     if not any(m.get("role") == "system" for m in messages):
         messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
-    messages = messages + [{"role": "user", "content": user_message}]
     tool_uses = []
     for _ in range(max_rounds):
         result = llm_client.chat(messages, TOOLS)
         if not result.tool_calls:
             messages.append({"role": "assistant", "content": result.text})
-            return {"reply": result.text, "messages": messages, "tool_uses": tool_uses}
-        messages.append({
-            "role": "assistant", "content": result.text,
-            "tool_calls": [
-                {"id": tc.id, "type": "function",
-                 "function": {"name": tc.name, "arguments": json.dumps(tc.arguments, ensure_ascii=False)}}
-                for tc in result.tool_calls
-            ],
-        })
+            _persist("assistant", result.text)
+            return {"reply": result.text, "tool_uses": tool_uses}
+        tc_list = [
+            {"id": tc.id, "type": "function",
+             "function": {"name": tc.name, "arguments": json.dumps(tc.arguments, ensure_ascii=False)}}
+            for tc in result.tool_calls
+        ]
+        messages.append({"role": "assistant", "content": result.text, "tool_calls": tc_list})
+        _persist("assistant", result.text, tool_calls=tc_list)
         for tc in result.tool_calls:
             output = execute_tool(tc.name, tc.arguments)
             tool_uses.append({"tool": tc.name, "args": tc.arguments, "output": output})
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": output})
-    return {"reply": "步骤较多，已暂停（你可以让我继续）", "messages": messages, "tool_uses": tool_uses}
+            _persist("tool", output, tool_call_id=tc.id)
+    return {"reply": "步骤较多，已暂停（你可以让我继续）", "tool_uses": tool_uses}

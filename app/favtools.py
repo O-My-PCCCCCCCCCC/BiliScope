@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from app.bilibili.client import BiliClient
 from app.bilibili.favorite import fetch_folder_items, fetch_folders
@@ -49,3 +50,32 @@ def move_fav_items(src_media_id: int, tar_media_id: int, bvids: list[str]) -> di
             "tar_media_id": tar_media_id,
             "resources": resources,
         })
+
+
+def extract_bvid(link: str) -> str:
+    """从 B 站链接或纯 BV 号中提取 bvid。"""
+    m = re.search(r"(BV[0-9A-Za-z]{10})", link or "")
+    if not m:
+        raise ValueError(f"无法从「{link}」中识别视频链接")
+    return m.group(1)
+
+
+def analyze_video(link: str) -> dict:
+    """分析一个 B 站视频链接，返回标题/UP主/简介/分区/播放量等。"""
+    bvid = extract_bvid(link)
+    with _client() as c:
+        data = c.get_json("/x/web-interface/view", {"bvid": bvid})
+        d = data.get("data") or {}
+        owner = d.get("owner") or {}
+        stat = d.get("stat") or {}
+        return {
+            "bvid": bvid,
+            "title": d.get("title", ""),
+            "up": owner.get("name", ""),
+            "tname": d.get("tname", ""),
+            "desc": (d.get("desc") or "")[:300],
+            "duration": d.get("duration", 0),
+            "view_count": stat.get("view", 0),
+            "danmaku": stat.get("danmaku", 0),
+            "pic": d.get("pic", ""),
+        }

@@ -413,7 +413,6 @@ def chat_post(payload: ChatPayload) -> dict:
         result = chat_mod.run_chat(get_llm_client(llm_cfg), chat_mod.get_history(), payload.message)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI 调用失败: {e}")
-    chat_mod.set_history(result["messages"])
     return {"reply": result["reply"], "tool_uses": result["tool_uses"]}
 
 
