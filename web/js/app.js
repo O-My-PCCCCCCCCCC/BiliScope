@@ -1021,20 +1021,40 @@ const Settings = {
   },
 };
 
+const ContentBrowser = {
+  components: { History, Favorites, Dynamics },
+  template: `
+    <el-tabs v-model="tab">
+      <el-tab-pane label="观看历史" name="history"><History/></el-tab-pane>
+      <el-tab-pane label="收藏夹" name="favorites"><Favorites/></el-tab-pane>
+      <el-tab-pane label="我的动态" name="dynamics"><Dynamics/></el-tab-pane>
+    </el-tabs>
+  `,
+  setup() { const tab = ref('history'); return { tab }; },
+};
+
+const AnalysisHub = {
+  components: { Analysis, DeepAnalysis },
+  template: `
+    <el-tabs v-model="tab">
+      <el-tab-pane label="内容标签" name="tags"><Analysis/></el-tab-pane>
+      <el-tab-pane label="深度统计" name="deep"><DeepAnalysis/></el-tab-pane>
+    </el-tabs>
+  `,
+  setup() { const tab = ref('tags'); return { tab }; },
+};
+
 const App = {
-  components: { Overview, History, Favorites, Monitor, Analysis, Dynamics, DeepAnalysis, Downloads, Chat, Settings },
+  components: { Overview, ContentBrowser, Monitor, AnalysisHub, Downloads, Chat, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
         <div class="logo">BiliScope</div>
         <el-menu :default-active="route" @select="route = $event" class="menu">
           <el-menu-item index="overview"><el-icon><DataLine/></el-icon>概览</el-menu-item>
-          <el-menu-item index="history"><el-icon><Clock/></el-icon>观看历史</el-menu-item>
-          <el-menu-item index="favorites"><el-icon><Star/></el-icon>收藏夹</el-menu-item>
+          <el-menu-item index="content"><el-icon><FolderOpened/></el-icon>内容浏览</el-menu-item>
           <el-menu-item index="monitor"><el-icon><Bell/></el-icon>监测中心<el-badge :value="status.alerts_unread || 0" :hidden="!(status.alerts_unread)" class="menu-badge"/></el-menu-item>
-          <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>内容分析</el-menu-item>
-          <el-menu-item index="deep"><el-icon><TrendCharts/></el-icon>深度分析</el-menu-item>
-          <el-menu-item index="dynamics"><el-icon><Message/></el-icon>我的动态</el-menu-item>
+          <el-menu-item index="analysis"><el-icon><TrendCharts/></el-icon>分析</el-menu-item>
           <el-menu-item index="downloads"><el-icon><Download/></el-icon>下载管理</el-menu-item>
           <el-menu-item index="chat"><el-icon><ChatDotRound/></el-icon>AI 助手</el-menu-item>
           <el-menu-item index="settings"><el-icon><Setting/></el-icon>设置</el-menu-item>
@@ -1047,12 +1067,9 @@ const App = {
       </el-aside>
       <el-main>
         <Overview v-if="route === 'overview'" :status="status" @refresh="loadStatus"/>
-        <History v-else-if="route === 'history'"/>
-        <Favorites v-else-if="route === 'favorites'"/>
+        <ContentBrowser v-else-if="route === 'content'"/>
         <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
-        <Analysis v-else-if="route === 'analysis'"/>
-        <DeepAnalysis v-else-if="route === 'deep'"/>
-        <Dynamics v-else-if="route === 'dynamics'"/>
+        <AnalysisHub v-else-if="route === 'analysis'"/>
         <Downloads v-else-if="route === 'downloads'"/>
         <Chat v-else-if="route === 'chat'"/>
         <Settings v-else-if="route === 'settings'" :status="status" @refresh="loadStatus"/>
