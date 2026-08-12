@@ -243,6 +243,12 @@ const History = {
       await fetchPage();
     }
     function doSearch() { reset(); }
+    function onScroll() {
+      const scroller = document.querySelector('.el-main');
+      if (!scroller) return;
+      if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 400
+          && !loading.value && hasMore.value) fetchPage();
+    }
     function onSentinel(el) {
       if (observer) observer.disconnect();
       observer = new IntersectionObserver((entries) => {
@@ -269,8 +275,16 @@ const History = {
       if (diff < 604800) return Math.floor(diff / 86400) + '天前';
       return new Date(ts * 1000).toLocaleDateString('zh-CN');
     }
-    onMounted(() => { reset(); });
-    onBeforeUnmount(() => { if (observer) observer.disconnect(); });
+    onMounted(() => {
+      reset();
+      const scroller = document.querySelector('.el-main');
+      if (scroller) scroller.addEventListener('scroll', onScroll);
+    });
+    onBeforeUnmount(() => {
+      const scroller = document.querySelector('.el-main');
+      if (scroller) scroller.removeEventListener('scroll', onScroll);
+      if (observer) observer.disconnect();
+    });
     return { search, items, loading, hasMore, onSentinel, doSearch, open, imgUrl, fmtNum, fmtDur, timeAgo };
   },
 };
