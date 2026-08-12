@@ -10,6 +10,7 @@ from app.bilibili.client import BiliError
 from app.config import get_cookies, load_config
 from app.database import get_conn, init_db
 from app.monitor import check_invalid, check_updates
+from app.report import generate_report
 from app.sync import run_full_sync
 
 router = APIRouter(prefix="/api")
@@ -136,6 +137,45 @@ def monitor_updates() -> list:
     finally:
         conn.close()
     return [dict(r) for r in rows]
+
+
+@router.post("/reports/generate")
+def report_generate(type: str = Query("weekly")) -> dict:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return generate_report(conn, type)
+    finally:
+        conn.close()
+
+
+@router.get("/reports")
+def reports_list() -> list:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        rows = conn.execute(
+            "SELECT id, period, type, created_at FROM reports ORDER BY created_at DESC LIMIT 100"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+@router.get("/reports/{report_id}")
+def report_detail(report_id: int) -> dict:
+    import json
+    conn = get_conn()
+    init_db(conn)
+    try:
+        row = conn.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="报告不存在")
+    d = dict(row)
+    d["stats"] = json.loads(d.pop("content_json"))
+    return d
 
 
 @router.post("/sync")
