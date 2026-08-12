@@ -6,6 +6,7 @@ from app.bilibili.client import BiliClient
 
 def normalize_history_item(item: dict) -> dict:
     owner = item.get("owner") or {}
+    stat = item.get("stat") or {}
     return {
         "bvid": item["bvid"],
         "title": item.get("title", ""),
@@ -17,6 +18,8 @@ def normalize_history_item(item: dict) -> dict:
         "pic": item.get("pic", ""),
         "tname": item.get("tname", ""),
         "ctime": item.get("ctime", 0),
+        "view_count": stat.get("view", 0),
+        "danmaku": stat.get("danmaku", 0),
     }
 
 

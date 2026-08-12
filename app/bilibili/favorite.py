@@ -32,6 +32,7 @@ def fetch_folder_items(client: BiliClient, media_id: int, max_pages: int = 100) 
             break
         for m in medias:
             upper = m.get("upper") or {}
+            cnt = m.get("cnt_info") or {}
             result.append({
                 "media_id": media_id,
                 "bvid": m.get("bvid", ""),
@@ -42,6 +43,8 @@ def fetch_folder_items(client: BiliClient, media_id: int, max_pages: int = 100) 
                 "duration": m.get("duration", 0),
                 "pic": m.get("cover", ""),
                 "tname": m.get("tname", ""),
+                "view_count": cnt.get("play", 0),
+                "danmaku": cnt.get("danmaku", 0),
             })
         if len(medias) < 20:
             break

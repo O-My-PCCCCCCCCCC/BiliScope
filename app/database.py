@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS videos (
     tname TEXT,
     ctime INTEGER,
     desc TEXT,
+    view_count INTEGER,
+    danmaku INTEGER,
     updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS history (
@@ -112,3 +114,6 @@ def _migrate(conn: sqlite3.Connection) -> None:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(videos)")}
     if "desc" not in cols:
         conn.execute("ALTER TABLE videos ADD COLUMN desc TEXT")
+    if "view_count" not in cols:
+        conn.execute("ALTER TABLE videos ADD COLUMN view_count INTEGER")
+        conn.execute("ALTER TABLE videos ADD COLUMN danmaku INTEGER")

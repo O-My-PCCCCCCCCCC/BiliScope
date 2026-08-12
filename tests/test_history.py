@@ -15,6 +15,7 @@ def item(bvid, view_at, **kw):
         "bvid": bvid, "title": "标题", "owner": {"mid": 1001, "name": "阿测"},
         "view_at": view_at, "progress": 30, "duration": 600,
         "pic": "http://x/pic.jpg", "tname": "生活", "ctime": 1700000000,
+        "stat": {"view": 12345, "danmaku": 67},
     }
     base.update(kw)
     return base
@@ -26,6 +27,8 @@ def test_normalize_history_item():
     assert n["bvid"] == "BV1"
     assert n["up_name"] == "阿测"
     assert n["tname"] == "生活"
+    assert n["view_count"] == 12345
+    assert n["danmaku"] == 67
 
 
 def test_fetch_history_single_page():

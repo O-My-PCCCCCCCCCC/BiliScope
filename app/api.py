@@ -327,7 +327,8 @@ def history(
         ).fetchone()[0]
         rows = conn.execute(
             f"""SELECT h.bvid, h.view_at, h.progress,
-                       v.title, v.up_name, v.pic, v.duration, v.tname
+                       v.title, v.up_name, v.pic, v.duration, v.tname,
+                       v.view_count, v.danmaku
                 FROM history h JOIN videos v ON h.bvid = v.bvid
                 {where}
                 ORDER BY h.view_at DESC
@@ -364,7 +365,8 @@ def favorite_items(
         ).fetchone()[0]
         rows = conn.execute(
             """SELECT f.media_id, f.bvid, f.fav_time,
-                      v.title, v.up_name, v.pic, v.tname, v.duration
+                      v.title, v.up_name, v.pic, v.tname, v.duration,
+                      v.view_count, v.danmaku
                FROM fav_items f LEFT JOIN videos v ON f.bvid = v.bvid
                WHERE f.media_id = ?
                ORDER BY f.fav_time DESC

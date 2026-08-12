@@ -13,15 +13,17 @@ from app.config import get_cookies, load_config, save_config
 
 def upsert_video(conn: sqlite3.Connection, v: dict) -> None:
     conn.execute(
-        """INSERT INTO videos (bvid, title, up_mid, up_name, pic, duration, tname, ctime, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO videos (bvid, title, up_mid, up_name, pic, duration, tname, ctime, view_count, danmaku, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(bvid) DO UPDATE SET
              title=excluded.title, up_mid=excluded.up_mid, up_name=excluded.up_name,
              pic=excluded.pic, duration=excluded.duration, tname=excluded.tname,
-             ctime=excluded.ctime, updated_at=excluded.updated_at""",
+             ctime=excluded.ctime, view_count=excluded.view_count,
+             danmaku=excluded.danmaku, updated_at=excluded.updated_at""",
         (v["bvid"], v["title"], v.get("up_mid", 0), v.get("up_name", ""),
          v.get("pic", ""), v.get("duration", 0), v.get("tname", ""),
-         v.get("ctime", 0), int(time.time())),
+         v.get("ctime", 0), v.get("view_count", 0), v.get("danmaku", 0),
+         int(time.time())),
     )
 
 
