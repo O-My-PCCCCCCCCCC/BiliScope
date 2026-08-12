@@ -24,3 +24,7 @@ venv/
 # 系统
 .DS_Store
 Thumbs.db
+
+# PyInstaller 构建产物
+build/
+dist/

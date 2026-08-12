@@ -4,6 +4,10 @@
 
 ## 运行
 
+**发行版（推荐，无需 Python 环境）**：下载 `dist/BiliScope.exe`，双击运行，浏览器打开 http://localhost:8000 。数据（config.json、数据库）自动生成在 exe 同目录。
+
+**从源码运行**：
+
 ```bash
 pip install -r requirements.txt
 python run.py
