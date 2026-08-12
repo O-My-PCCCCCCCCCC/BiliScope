@@ -2,12 +2,12 @@
 html, body, #app { height: 100%; }
 body { background: #141414; color: #e5e5e5; font-family: 'Microsoft YaHei', sans-serif; }
 .layout { height: 100%; }
-.aside { background: #1e1e1e; border-right: 1px solid #333; position: relative; }
+.aside { background: #1e1e1e; border-right: 1px solid #333; position: relative; display: flex; flex-direction: column; }
 .logo { color: #fb7299; font-size: 22px; font-weight: 700; padding: 20px 16px; }
 .menu { border-right: none; background: transparent; }
 .sync-status { position: absolute; bottom: 20px; left: 16px; }
-.account-card { position: absolute; bottom: 16px; left: 12px; right: 12px; background: #242424; border-radius: 8px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; }
-.account-avatar { width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; }
+.account-card { margin-top: auto; margin-left: 10px; margin-right: 10px; margin-bottom: 12px; background: #242424; border-radius: 8px; padding: 8px 10px; display: flex; gap: 8px; align-items: center; }
+.account-avatar { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
 .account-info { flex: 1; min-width: 0; }
 .account-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .account-uid { color: #999; font-size: 11px; margin: 2px 0; }
