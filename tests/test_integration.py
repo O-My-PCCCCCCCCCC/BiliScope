@@ -102,3 +102,18 @@ def test_report_chain():
     assert len(items) == 1
     detail = client.get(f"/api/reports/{result['id']}").json()
     assert detail["type"] == "weekly"
+
+
+def test_analysis_chain(monkeypatch):
+    import app.api as api_mod
+    config.save_cookies({"SESSDATA": "abc"})
+    config.save_config({**config.load_config(),
+                        "llm": {"provider": "ollama", "api_key": "", "base_url": "", "model": "qwen2.5:7b"}})
+    monkeypatch.setattr(api_mod, "analyze_unanalyzed", lambda conn, llm_client, limit=50: 2)
+
+    r = client.post("/api/analysis/run", params={"limit": 10})
+    assert r.status_code == 200
+    assert r.json() == {"analyzed": 2}
+
+    hw = client.get("/api/hardware").json()
+    assert "recommended_model" in hw

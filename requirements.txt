@@ -2,4 +2,7 @@ fastapi==0.115.12
 uvicorn[standard]==0.34.0
 httpx==0.28.1
 APScheduler==3.11.0
+anthropic
+openai
+psutil
 pytest==8.3.5
