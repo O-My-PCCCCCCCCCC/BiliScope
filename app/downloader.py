@@ -1,6 +1,7 @@
-"""yt-dlp 批量下载管理器（视频 MP4 / 音频 MP3），后台任务 + 进度。"""
+"""yt-dlp 批量下载管理器（视频 MP4 / 音频 MP3/m4a），后台任务 + 进度。"""
 from __future__ import annotations
 
+import shutil
 import threading
 
 from app.config import ROOT
@@ -74,10 +75,11 @@ def _run(urls: list[str], fmt: str) -> None:
             "progress_hooks": [_hook], "cookiefile": cookies, "retries": 3,
         }
         if fmt == "audio":
-            opts.update({
-                "format": "bestaudio/best",
-                "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}],
-            })
+            opts["format"] = "bestaudio/best"
+            if shutil.which("ffmpeg"):
+                opts["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]
+            else:
+                opts["postprocessors"] = []  # 无 ffmpeg 则直接下 m4a
         else:
             opts["format"] = "bv*+ba/b"
         with yt_dlp.YoutubeDL(opts) as ydl:

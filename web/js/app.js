@@ -523,6 +523,15 @@ const Favorites = {
     <h2>收藏夹</h2>
     <el-tabs v-model="favTab">
       <el-tab-pane label="收藏夹" name="folders">
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <el-button size="small" @click="selecting = !selecting">{{ selecting ? '完成选择' : '选择' }}</el-button>
+      <template v-if="selecting">
+        <el-button size="small" @click="selectAll">全选</el-button>
+        <el-button size="small" type="primary" :disabled="!selCount" @click="downloadSel('mp4')">下载所选视频 ({{ selCount }})</el-button>
+        <el-button size="small" :disabled="!selCount" @click="downloadSel('audio')">下载所选音频 ({{ selCount }})</el-button>
+        <el-button size="small" text @click="clearSel">清空</el-button>
+      </template>
+    </div>
     <div class="fav-layout">
       <div class="fav-side">
         <div v-for="f in folders" :key="f.media_id" class="fav-side-item"
@@ -533,8 +542,11 @@ const Favorites = {
       </div>
       <div class="fav-main" v-loading="loading" @scroll="onFavScroll">
         <div class="bili-grid">
-          <div class="bili-card" v-for="it in items" :key="it.bvid" @click="play(it)">
+          <div class="bili-card" v-for="it in items" :key="it.bvid"
+               :class="{ sel: selecting && sel[it.bvid] }"
+               @click="selecting ? toggleSelect(it) : play(it)">
             <div class="bili-cover">
+              <el-checkbox v-if="selecting" v-model="sel[it.bvid]" class="card-check" @click.stop/>
               <img v-if="it.title" :src="imgUrl(it.pic)" loading="lazy" decoding="async" :alt="it.title"/>
               <el-tag v-else type="danger" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">已失效</el-tag>
               <span v-if="it.title" class="bili-duration">{{ fmtDur(it.duration) }}</span>
@@ -617,6 +629,23 @@ const Favorites = {
       if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - 300
           && !loading.value && hasMore.value) loadPage();
     }
+    const selecting = ref(false);
+    const sel = Vue.reactive({});
+    const selCount = Vue.computed(() => Object.values(sel).filter(Boolean).length);
+    function toggleSelect(it) { if (it.bvid) sel[it.bvid] = !sel[it.bvid]; }
+    function selectAll() { items.value.forEach(it => { if (it.bvid) sel[it.bvid] = true; }); }
+    function clearSel() { Object.keys(sel).forEach(k => delete sel[k]); selecting.value = false; }
+    async function downloadSel(fmt) {
+      const bvids = Object.keys(sel).filter(k => sel[k]);
+      if (!bvids.length) { ElementPlus.ElMessage.warning('未选择视频'); return; }
+      const urls = bvids.map(b => `https://www.bilibili.com/video/${b}`);
+      try {
+        await api('/downloads/run', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls, fmt }) });
+        ElementPlus.ElMessage.success(`已开始下载 ${bvids.length} 个${fmt === 'audio' ? '音频' : '视频'}`);
+        clearSel();
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+    }
     function play(it) {
       if (it.title) window.open(`https://www.bilibili.com/video/${it.bvid}`, '_blank');
     }
@@ -638,6 +667,7 @@ const Favorites = {
     }
     onMounted(() => { loadFolders(); loadExtras(); });
     return { folders, items, activeId, loading, favTab, collections, collectedFolders, hasMore,
+             selecting, sel, selCount, toggleSelect, selectAll, clearSel, downloadSel,
              select, play, openCollection, openCollected, onFavScroll, imgUrl, fmtNum, fmtDur };
   },
 };
