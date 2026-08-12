@@ -1,4 +1,4 @@
-const { createApp, ref, onMounted, nextTick } = Vue;
+const { createApp, ref, onMounted, onBeforeUnmount, nextTick } = Vue;
 
 async function api(path, options = {}) {
   const res = await fetch('/api' + path, options);
@@ -203,10 +203,10 @@ const History = {
     <h2>观看历史</h2>
     <div style="margin-bottom:16px">
       <el-input v-model="search" placeholder="搜索标题或UP主" clearable style="width:320px"
-                @keyup.enter="load(1)"/>
-      <el-button type="primary" @click="load(1)">搜索</el-button>
+                @keyup.enter="doSearch"/>
+      <el-button type="primary" @click="doSearch">搜索</el-button>
     </div>
-    <div class="bili-grid" v-loading="loading">
+    <div class="bili-grid">
       <div class="bili-card" v-for="it in items" :key="it.bvid" @click="open(it)">
         <div class="bili-cover">
           <img :src="imgUrl(it.pic)" loading="lazy" :alt="it.title"/>
@@ -219,18 +219,36 @@ const History = {
         </div>
       </div>
     </div>
-    <el-pagination layout="prev, pager, next" :total="total" :page-size="pageSize"
-                   :current-page="page" @current-change="load" style="margin-top:16px"/>
+    <div ref="sentinel" style="height:20px"></div>
+    <div v-if="loading" style="text-align:center;color:#999;padding:12px">加载中...</div>
+    <div v-else-if="!hasMore && items.length" style="text-align:center;color:#666;padding:12px">已经到底啦，共 {{ items.length }} 条</div>
   `,
   setup() {
-    const search = ref(''); const items = ref([]); const total = ref(0);
-    const page = ref(1); const pageSize = 24; const loading = ref(false);
-    async function load(p) {
-      page.value = p || 1; loading.value = true;
+    const search = ref(''); const items = ref([]);
+    const page = ref(1); const pageSize = 24;
+    const loading = ref(false); const hasMore = ref(true);
+    let observer = null;
+    async function fetchPage() {
+      if (loading.value) return;
+      loading.value = true;
       try {
         const d = await api(`/history?search=${encodeURIComponent(search.value)}&page=${page.value}&page_size=${pageSize}`);
-        items.value = d.items; total.value = d.total;
+        items.value.push(...d.items);
+        hasMore.value = items.value.length < d.total;
+        if (hasMore.value) page.value += 1;
       } finally { loading.value = false; }
+    }
+    async function reset() {
+      items.value = []; page.value = 1; hasMore.value = true;
+      await fetchPage();
+    }
+    function doSearch() { reset(); }
+    function onSentinel(el) {
+      if (observer) observer.disconnect();
+      observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !loading.value && hasMore.value) fetchPage();
+      }, { rootMargin: '300px' });
+      if (el) observer.observe(el);
     }
     function open(it) { window.open(`https://www.bilibili.com/video/${it.bvid}`, '_blank'); }
     function fmtNum(n) {
@@ -251,8 +269,9 @@ const History = {
       if (diff < 604800) return Math.floor(diff / 86400) + '天前';
       return new Date(ts * 1000).toLocaleDateString('zh-CN');
     }
-    onMounted(() => load(1));
-    return { search, items, total, page, pageSize, loading, load, open, imgUrl, fmtNum, fmtDur, timeAgo };
+    onMounted(() => { reset(); });
+    onBeforeUnmount(() => { if (observer) observer.disconnect(); });
+    return { search, items, loading, hasMore, onSentinel, doSearch, open, imgUrl, fmtNum, fmtDur, timeAgo };
   },
 };
 
