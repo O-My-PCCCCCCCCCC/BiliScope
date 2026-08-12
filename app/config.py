@@ -14,6 +14,7 @@ DEFAULT_CONFIG: dict = {
     "uid": None,
     "login_at": None,
     "smtp": {"host": "", "port": 465, "user": "", "password": "", "to": ""},
+    "llm": {"provider": "ollama", "api_key": "", "base_url": "", "model": ""},
     "task_interval": {"history": "03:00", "invalid": "04:00", "updates": 6},
 }
 

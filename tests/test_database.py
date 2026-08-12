@@ -31,6 +31,30 @@ def test_insert_and_query_video(tmp_path):
         conn.close()
 
 
+def test_videos_has_desc_and_analysis_table(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(videos)")}
+    assert "desc" in cols
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "video_analysis" in tables
+    conn.close()
+
+
+def test_old_db_migrates_desc_column(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    conn = database.get_conn()
+    conn.execute("CREATE TABLE videos (bvid TEXT PRIMARY KEY, title TEXT)")
+    conn.commit()
+    conn.close()
+    database.init_db()
+    conn = database.get_conn()
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(videos)")}
+    assert "desc" in cols
+    conn.close()
+
+
 def test_history_unique_constraint(tmp_path):
     database.set_db_path(tmp_path / "t.db")
     database.init_db()

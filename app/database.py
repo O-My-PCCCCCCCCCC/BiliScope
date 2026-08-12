@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS videos (
     duration INTEGER,
     tname TEXT,
     ctime INTEGER,
+    desc TEXT,
     updated_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS history (
@@ -76,6 +77,13 @@ CREATE TABLE IF NOT EXISTS alerts (
     created_at INTEGER,
     read INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS video_analysis (
+    bvid TEXT PRIMARY KEY,
+    tags_json TEXT,
+    summary TEXT,
+    analyzed_at INTEGER,
+    model TEXT
+);
 """
 
 
@@ -96,4 +104,11 @@ def get_conn(db_path: Path | None = None) -> sqlite3.Connection:
 def init_db(conn: sqlite3.Connection | None = None) -> None:
     conn = conn or get_conn()
     conn.executescript(SCHEMA)
+    _migrate(conn)
     conn.commit()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(videos)")}
+    if "desc" not in cols:
+        conn.execute("ALTER TABLE videos ADD COLUMN desc TEXT")
