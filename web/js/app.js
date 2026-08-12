@@ -563,7 +563,10 @@ const Settings = {
             </div>
             <el-button size="small" type="primary" :loading="installing === m.name" @click="installModel(m.name)">后台安装</el-button>
           </div>
-          <div v-if="!ollamaOk" style="color:#e6a23c;font-size:12px;margin-top:6px">⚠️ 未检测到 Ollama，请先安装</div>
+          <div v-if="!ollamaOk" style="color:#e6a23c;font-size:12px;margin-top:6px">
+            ⚠️ 未检测到 Ollama
+            <el-button size="small" :loading="ollamaInstalling" @click="installOllama">一键安装 Ollama</el-button>
+          </div>
           <div v-if="installState.state === 'running'" style="margin-top:8px">
             <el-progress :percentage="installState.progress"/>
             <div style="color:#999;font-size:12px">{{ installState.message }}</div>
@@ -639,7 +642,17 @@ const Settings = {
     const modelList = ref([]); const modelLoading = ref(false);
     const installing = ref(''); const ollamaOk = ref(true);
     const installState = ref({ state: 'idle', progress: 0, message: '' });
+    const ollamaInstalling = ref(false);
     let installTimer = null;
+    async function installOllama() {
+      ollamaInstalling.value = true;
+      try {
+        const r = await api('/ollama/install', { method: 'POST' });
+        if (r.error) { ElementPlus.ElMessage.error(r.error); ollamaInstalling.value = false; return; }
+        ElementPlus.ElMessage.success('开始后台安装 Ollama（约 700MB）');
+        pollInstall();
+      } catch (e) { ElementPlus.ElMessage.error(e.message); ollamaInstalling.value = false; }
+    }
     async function recommendModels() {
       modelLoading.value = true;
       try {
@@ -664,10 +677,15 @@ const Settings = {
           const s = await api('/models/install-status');
           installState.value = s;
           if (s.state === 'done') {
-            clearInterval(installTimer); installing.value = '';
-            ElementPlus.ElMessage.success('模型安装完成，可直接使用'); loadLlm();
+            clearInterval(installTimer); installing.value = ''; ollamaInstalling.value = false;
+            if (s.phase === 'ollama') {
+              ollamaOk.value = true;
+              ElementPlus.ElMessage.success('Ollama 安装完成，可以选模型了'); loadLlm();
+            } else {
+              ElementPlus.ElMessage.success('模型安装完成，可直接使用'); loadLlm();
+            }
           } else if (s.state === 'error') {
-            clearInterval(installTimer); installing.value = '';
+            clearInterval(installTimer); installing.value = ''; ollamaInstalling.value = false;
             ElementPlus.ElMessage.error('安装失败：' + s.message);
           }
         } catch (e) {}
@@ -695,9 +713,9 @@ const Settings = {
     }
     onMounted(() => { loadConfig().catch(() => {}); loadAccount(); });
     return { qrVisible, qrMsg, syncing, smtp, testing, llm, hwLoading, hwModel, account,
-             modelList, modelLoading, installing, ollamaOk, installState,
+             modelList, modelLoading, installing, ollamaOk, installState, ollamaInstalling,
              fmt, openQr, stopPoll, sync, saveSmtp, testEmail, saveLlm, recommendLocal,
-             recommendModels, installModel };
+             recommendModels, installModel, installOllama };
   },
 };
 

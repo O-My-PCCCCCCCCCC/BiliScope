@@ -330,6 +330,12 @@ def models_recommend() -> dict:
     }
 
 
+@router.post("/ollama/install")
+def ollama_install() -> dict:
+    from app.ollama_manager import start_ollama_install
+    return start_ollama_install()
+
+
 @router.post("/models/install")
 def models_install(payload: dict) -> dict:
     model = (payload or {}).get("model", "")
