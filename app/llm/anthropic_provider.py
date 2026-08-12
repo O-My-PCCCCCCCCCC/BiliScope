@@ -32,11 +32,16 @@ class AnthropicLLM(LLMClient):
                  "input_schema": t["function"]["parameters"]}
                 for t in tools
             ]
-        api_messages = self._to_anthropic_messages(messages)
-        resp = self.client.messages.create(
-            model=self.model, max_tokens=1024,
-            messages=api_messages, tools=api_tools,
+        system_parts = [m["content"] for m in messages if m["role"] == "system"]
+        api_messages = self._to_anthropic_messages(
+            [m for m in messages if m["role"] != "system"]
         )
+        kw: dict = {"model": self.model, "max_tokens": 1024, "messages": api_messages}
+        if system_parts:
+            kw["system"] = "\n".join(system_parts)
+        if api_tools:
+            kw["tools"] = api_tools
+        resp = self.client.messages.create(**kw)
         text = "".join(b.text for b in resp.content if b.type == "text")
         tool_calls = [
             ToolCall(id=b.id, name=b.name, arguments=b.input or {})

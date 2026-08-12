@@ -6,6 +6,12 @@ import json
 import app.favtools as favtools
 from app.llm.base import LLMClient
 
+SYSTEM_PROMPT = (
+    "你是 BiliScope 的 AI 助手，帮助用户管理 B 站收藏夹。"
+    "你可以查看收藏夹和其中视频、新建/删除收藏夹、移动视频到别的收藏夹。"
+    "用户让你整理收藏夹时，先看内容再操作，不要编造数据；回答简洁清楚，避免冗长点评。"
+)
+
 TOOLS = [
     {"type": "function", "function": {"name": "list_folders",
         "description": "列出我的全部收藏夹及其 id", "parameters": {"type": "object", "properties": {}}}},
@@ -68,7 +74,10 @@ def execute_tool(name: str, args: dict) -> str:
 
 def run_chat(llm_client: LLMClient, history: list[dict], user_message: str,
              max_rounds: int = 6) -> dict:
-    messages = history + [{"role": "user", "content": user_message}]
+    messages = list(history)
+    if not any(m.get("role") == "system" for m in messages):
+        messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+    messages = messages + [{"role": "user", "content": user_message}]
     tool_uses = []
     for _ in range(max_rounds):
         result = llm_client.chat(messages, TOOLS)

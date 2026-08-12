@@ -21,7 +21,9 @@ const Chat = {
       <div v-for="(m, i) in display" :key="i" class="chat-msg" :class="m.role">
         <div class="chat-bubble" v-if="m.text">{{ m.text }}</div>
       </div>
-      <div v-if="loading" class="chat-msg assistant"><div class="chat-bubble">思考中...</div></div>
+      <div v-if="thinking" class="chat-msg assistant">
+        <div class="chat-bubble thinking">正在思考<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
+      </div>
     </div>
     <div class="chat-input">
       <el-input v-model="input" placeholder="例如：把音乐收藏夹里的视频整理到新文件夹" @keyup.enter="send"/>
@@ -31,7 +33,7 @@ const Chat = {
   `,
   setup() {
     const messages = ref([]); const display = ref([]);
-    const input = ref(''); const loading = ref(false);
+    const input = ref(''); const loading = ref(false); const thinking = ref(false);
     async function loadHistory() {
       try {
         const d = await api('/chat/history');
@@ -58,11 +60,20 @@ const Chat = {
         if (box) box.scrollTop = box.scrollHeight;
       });
     }
+    function scrollToBottom() {
+      nextTick(() => {
+        const box = document.querySelector('.chat-box');
+        if (box) box.scrollTop = box.scrollHeight;
+      });
+    }
     async function send() {
       const text = input.value.trim();
       if (!text || loading.value) return;
       input.value = '';
       loading.value = true;
+      thinking.value = true;
+      display.value.push({ role: 'user', text });  // 乐观显示，立即可见
+      scrollToBottom();
       try {
         await api('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: text }) });
@@ -70,14 +81,18 @@ const Chat = {
       } catch (e) {
         ElementPlus.ElMessage.error(e.message);
         display.value.push({ role: 'assistant', text: '⚠️ ' + e.message });
-      } finally { loading.value = false; }
+      } finally {
+        loading.value = false;
+        thinking.value = false;
+        scrollToBottom();
+      }
     }
     async function reset() {
       await api('/chat/reset', { method: 'POST' });
       messages.value = []; display.value = [];
     }
     onMounted(() => loadHistory().catch(() => {}));
-    return { messages, display, input, loading, send, reset };
+    return { messages, display, input, loading, thinking, send, reset };
   },
 };
 
