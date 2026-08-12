@@ -198,28 +198,30 @@ const Monitor = {
 const History = {
   template: `
     <h2>观看历史</h2>
-    <div style="margin-bottom:12px">
+    <div style="margin-bottom:16px">
       <el-input v-model="search" placeholder="搜索标题或UP主" clearable style="width:320px"
                 @keyup.enter="load(1)"/>
       <el-button type="primary" @click="load(1)">搜索</el-button>
     </div>
-    <el-table :data="items" v-loading="loading" style="width:100%">
-      <el-table-column label="观看时间" width="180">
-        <template #default="s">{{ fmt(s.row.view_at) }}</template>
-      </el-table-column>
-      <el-table-column prop="title" label="标题" min-width="260"/>
-      <el-table-column prop="up_name" label="UP主" width="140"/>
-      <el-table-column prop="tname" label="分区" width="100"/>
-      <el-table-column label="进度" width="100">
-        <template #default="s">{{ pct(s.row.progress, s.row.duration) }}</template>
-      </el-table-column>
-    </el-table>
+    <div class="bili-grid" v-loading="loading">
+      <div class="bili-card" v-for="it in items" :key="it.bvid" @click="open(it)">
+        <div class="bili-cover">
+          <img :src="it.pic" loading="lazy" :alt="it.title"/>
+          <span class="bili-duration">{{ fmtDur(it.duration) }}</span>
+        </div>
+        <div class="bili-title">{{ it.title }}</div>
+        <div class="bili-meta">
+          <span class="bili-up">{{ it.up_name }} · {{ timeAgo(it.view_at) }}</span>
+          <span class="bili-stats">{{ fmtNum(it.view_count) }} 播放</span>
+        </div>
+      </div>
+    </div>
     <el-pagination layout="prev, pager, next" :total="total" :page-size="pageSize"
-                   :current-page="page" @current-change="load" style="margin-top:12px"/>
+                   :current-page="page" @current-change="load" style="margin-top:16px"/>
   `,
   setup() {
     const search = ref(''); const items = ref([]); const total = ref(0);
-    const page = ref(1); const pageSize = 20; const loading = ref(false);
+    const page = ref(1); const pageSize = 24; const loading = ref(false);
     async function load(p) {
       page.value = p || 1; loading.value = true;
       try {
@@ -227,10 +229,27 @@ const History = {
         items.value = d.items; total.value = d.total;
       } finally { loading.value = false; }
     }
-    const fmt = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN') : '';
-    const pct = (prog, dur) => dur ? Math.round(prog / dur * 100) + '%' : (prog || '-');
+    function open(it) { window.open(`https://www.bilibili.com/video/${it.bvid}`, '_blank'); }
+    function fmtNum(n) {
+      n = n || 0;
+      return n >= 10000 ? (n / 10000).toFixed(1).replace(/\.0$/, '') + '万' : String(n);
+    }
+    function fmtDur(s) {
+      s = s || 0;
+      const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+      const mm = String(m).padStart(2, '0'), ss = String(sec).padStart(2, '0');
+      return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+    }
+    function timeAgo(ts) {
+      if (!ts) return '';
+      const diff = (Date.now() / 1000 - ts);
+      if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+      if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+      if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+      return new Date(ts * 1000).toLocaleDateString('zh-CN');
+    }
     onMounted(() => load(1));
-    return { search, items, total, page, pageSize, loading, load, fmt, pct };
+    return { search, items, total, page, pageSize, loading, load, open, fmtNum, fmtDur, timeAgo };
   },
 };
 
@@ -245,25 +264,26 @@ const Favorites = {
         </el-card>
       </el-col>
     </el-row>
-    <el-dialog v-model="dialog" :title="current?.name" width="70%">
-      <el-table :data="items" v-loading="loading">
-        <el-table-column label="标题" min-width="260">
-          <template #default="s">
-            <span v-if="s.row.title">{{ s.row.title }}</span>
-            <el-tag v-else type="danger">已失效</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="up_name" label="UP主" width="140"/>
-        <el-table-column label="收藏时间" width="180">
-          <template #default="s">{{ fmt(s.row.fav_time) }}</template>
-        </el-table-column>
-      </el-table>
+    <el-dialog v-model="dialog" :title="current?.name" width="80%">
+      <div class="bili-grid" v-loading="loading">
+        <div class="bili-card" v-for="it in items" :key="it.bvid" @click="openVideo(it)">
+          <div class="bili-cover">
+            <img v-if="it.title" :src="it.pic" loading="lazy" :alt="it.title"/>
+            <el-tag v-else type="danger" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">已失效</el-tag>
+            <span v-if="it.title" class="bili-duration">{{ fmtDur(it.duration) }}</span>
+          </div>
+          <div class="bili-title">{{ it.title || '已失效视频' }}</div>
+          <div class="bili-meta">
+            <span class="bili-up">{{ it.up_name }}</span>
+            <span class="bili-stats">{{ fmtNum(it.view_count) }} 播放</span>
+          </div>
+        </div>
+      </div>
     </el-dialog>
   `,
   setup() {
     const folders = ref([]); const items = ref([]); const current = ref(null);
     const dialog = ref(false); const loading = ref(false);
-    const fmt = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN') : '';
     async function loadFolders() {
       folders.value = await api('/favorites');
     }
@@ -274,8 +294,21 @@ const Favorites = {
         items.value = d.items;
       } finally { loading.value = false; }
     }
+    function openVideo(it) {
+      if (it.title) window.open(`https://www.bilibili.com/video/${it.bvid}`, '_blank');
+    }
+    function fmtNum(n) {
+      n = n || 0;
+      return n >= 10000 ? (n / 10000).toFixed(1).replace(/\.0$/, '') + '万' : String(n);
+    }
+    function fmtDur(s) {
+      s = s || 0;
+      const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+      const mm = String(m).padStart(2, '0'), ss = String(sec).padStart(2, '0');
+      return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+    }
     onMounted(loadFolders);
-    return { folders, items, current, dialog, loading, fmt, open };
+    return { folders, items, current, dialog, loading, open, openVideo, fmtNum, fmtDur };
   },
 };
 
