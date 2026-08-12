@@ -409,6 +409,32 @@ def favorites() -> list:
     return [dict(r) for r in rows]
 
 
+@router.get("/collections")
+def collections() -> list:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM collections ORDER BY category, collection_id"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+@router.get("/favorites/collected")
+def favorites_collected() -> list:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM collected_folders ORDER BY media_id"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
 @router.get("/favorites/{media_id}")
 def favorite_items(
     media_id: int,

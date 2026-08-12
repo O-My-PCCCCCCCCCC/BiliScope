@@ -104,6 +104,25 @@ CREATE TABLE IF NOT EXISTS coin_log (
     reason TEXT,
     UNIQUE(time, delta, reason)
 );
+CREATE TABLE IF NOT EXISTS collections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    collection_id INTEGER,
+    title TEXT,
+    cover TEXT,
+    total INTEGER,
+    category TEXT,
+    updated_at INTEGER,
+    UNIQUE(collection_id, category)
+);
+CREATE TABLE IF NOT EXISTS collected_folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_id INTEGER,
+    title TEXT,
+    media_count INTEGER,
+    up_name TEXT,
+    updated_at INTEGER,
+    UNIQUE(media_id)
+);
 """
 
 

@@ -292,6 +292,8 @@ const History = {
 const Favorites = {
   template: `
     <h2>收藏夹</h2>
+    <el-tabs v-model="favTab">
+      <el-tab-pane label="收藏夹" name="folders">
     <div class="fav-layout">
       <div class="fav-side">
         <div v-for="f in folders" :key="f.media_id" class="fav-side-item"
@@ -317,15 +319,51 @@ const Favorites = {
         </div>
       </div>
     </div>
+      </el-tab-pane>
+      <el-tab-pane label="追的合集" name="collections">
+        <div class="bili-grid">
+          <div class="bili-card" v-for="c in collections" :key="c.collection_id + '-' + c.category" @click="openCollection(c)">
+            <div class="bili-cover">
+              <img :src="imgUrl(c.cover)" loading="lazy" :alt="c.title"/>
+            </div>
+            <div class="bili-title">{{ c.title }}</div>
+            <div class="bili-meta">
+              <span class="bili-up">{{ c.category === 'season' ? '合集' : '系列' }}</span>
+              <span class="bili-stats">{{ c.total }} 集</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="!collections.length" class="empty-tip">暂无追的合集</div>
+      </el-tab-pane>
+      <el-tab-pane label="收藏的收藏夹" name="collected">
+        <div class="bili-grid">
+          <div class="bili-card" v-for="cf in collectedFolders" :key="cf.media_id" @click="openCollected(cf)">
+            <div class="bili-cover folder-cover">📁</div>
+            <div class="bili-title">{{ cf.title }}</div>
+            <div class="bili-meta">
+              <span class="bili-up">{{ cf.up_name }}</span>
+              <span class="bili-stats">{{ cf.media_count }} 个</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="!collectedFolders.length" class="empty-tip">暂无收藏的收藏夹</div>
+      </el-tab-pane>
+    </el-tabs>
   `,
   setup() {
     const folders = ref([]); const items = ref([]);
     const activeId = ref(null); const loading = ref(false);
+    const favTab = ref('folders');
+    const collections = ref([]); const collectedFolders = ref([]);
     async function loadFolders() {
       folders.value = await api('/favorites');
       if (folders.value.length && activeId.value == null) {
         select(folders.value[0]);
       }
+    }
+    async function loadExtras() {
+      collections.value = await api('/collections').catch(() => []);
+      collectedFolders.value = await api('/favorites/collected').catch(() => []);
     }
     async function select(f) {
       activeId.value = f.media_id; loading.value = true;
@@ -337,6 +375,12 @@ const Favorites = {
     function play(it) {
       if (it.title) window.open(`https://www.bilibili.com/video/${it.bvid}`, '_blank');
     }
+    function openCollection(c) {
+      window.open(`https://www.bilibili.com/medialist/play/${c.collection_id}`, '_blank');
+    }
+    function openCollected(cf) {
+      window.open(`https://www.bilibili.com/medialist/detail/ml${cf.media_id}`, '_blank');
+    }
     function fmtNum(n) {
       n = n || 0;
       return n >= 10000 ? (n / 10000).toFixed(1).replace(/\.0$/, '') + '万' : String(n);
@@ -347,8 +391,9 @@ const Favorites = {
       const mm = String(m).padStart(2, '0'), ss = String(sec).padStart(2, '0');
       return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
     }
-    onMounted(loadFolders);
-    return { folders, items, activeId, loading, select, play, imgUrl, fmtNum, fmtDur };
+    onMounted(() => { loadFolders(); loadExtras(); });
+    return { folders, items, activeId, loading, favTab, collections, collectedFolders,
+             select, play, openCollection, openCollected, imgUrl, fmtNum, fmtDur };
   },
 };
 

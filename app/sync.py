@@ -148,6 +148,50 @@ def sync_account(conn: sqlite3.Connection, client: BiliClient, uid: int) -> dict
             "coin_log": n_coins}
 
 
+def sync_collections(conn: sqlite3.Connection, client: BiliClient, uid: int) -> int:
+    """采集追的合集/系列。返回新增条数。"""
+    data = client.get_json(
+        "/x/polymer/web-space/seasons_series_list",
+        {"mid": uid, "page_num": 1, "page_size": 20},
+    )
+    items = (data.get("data") or {}).get("items_lists") or {}
+    n = 0
+    now = int(time.time())
+    for category, key in (("season", "seasons_list"), ("series", "series_list")):
+        for it in items.get(key) or []:
+            meta = it.get("meta") or {}
+            cid = meta.get("id") or it.get("id")
+            if not cid:
+                continue
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO collections (collection_id, title, cover, total, category, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (cid, meta.get("title", ""), meta.get("cover", ""),
+                 meta.get("total", 0), category, now),
+            )
+            n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def sync_collected_folders(conn: sqlite3.Connection, client: BiliClient, uid: int) -> int:
+    """采集收藏的收藏夹。返回新增条数。"""
+    data = client.get_json(
+        "/x/v3/fav/folder/collected/list", {"up_mid": uid, "pn": 1, "ps": 50}
+    )
+    items = (data.get("data") or {}).get("list") or []
+    n = 0
+    now = int(time.time())
+    for f in items:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO collected_folders (media_id, title, media_count, up_name, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (f.get("id"), f.get("title", ""), f.get("media_count", 0),
+             (f.get("upper") or {}).get("name", ""), now),
+        )
+        n += cur.rowcount
+    conn.commit()
+    return n
+
+
 def run_full_sync(client: BiliClient | None = None) -> dict:
     """执行完整同步，返回各数据源的新增条数。未登录抛 BiliError。"""
     from app.database import get_conn, init_db
@@ -166,6 +210,8 @@ def run_full_sync(client: BiliClient | None = None) -> dict:
         n_hist = sync_history(conn, client)
         n_fav = sync_favorites(conn, client, uid) if uid else 0
         n_fol = sync_followings(conn, client, uid) if uid else 0
+        n_col = sync_collections(conn, client, uid) if uid else 0
+        n_cf = sync_collected_folders(conn, client, uid) if uid else 0
         account = sync_account(conn, client, uid) if uid else {}
         if uid:
             cfg = load_config()
@@ -173,6 +219,7 @@ def run_full_sync(client: BiliClient | None = None) -> dict:
             save_config(cfg)
         conn.commit()
         return {"history": n_hist, "favorites": n_fav, "followings": n_fol,
+                "collections": n_col, "collected_folders": n_cf,
                 "coins": account.get("coins", 0), "coin_log": account.get("coin_log", 0)}
     finally:
         conn.close()
