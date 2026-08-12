@@ -12,7 +12,7 @@ def make_client(handler) -> BiliClient:
 
 def item(bvid, view_at, **kw):
     base = {
-        "bvid": bvid, "title": "标题", "author_mid": 1001, "author_name": "阿测",
+        "bvid": bvid, "title": "标题", "owner": {"mid": 1001, "name": "阿测"},
         "view_at": view_at, "progress": 30, "duration": 600,
         "pic": "http://x/pic.jpg", "tname": "生活", "ctime": 1700000000,
     }
@@ -29,10 +29,9 @@ def test_normalize_history_item():
 
 
 def test_fetch_history_single_page():
-    pages = iter([{
-        "code": 0,
-        "data": {"list": [item("BV1", 100), item("BV2", 99)], "max_id": None},
-    }])
+    pages = iter([
+        {"code": 0, "data": [item("BV1", 100), item("BV2", 99)]},
+    ])
 
     def handler(request):
         return httpx.Response(200, json=next(pages))
@@ -42,18 +41,17 @@ def test_fetch_history_single_page():
     assert rows[0]["bvid"] == "BV1"
 
 
-def test_fetch_history_paginates_until_empty():
+def test_fetch_history_paginates_until_short_page():
     responses = [
-        {"code": 0, "data": {"list": [item("BV1", 100)], "max_id": 50}},
-        {"code": 0, "data": {"list": [item("BV2", 99)], "max_id": 25}},
-        {"code": 0, "data": {"list": [], "max_id": None}},
+        {"code": 0, "data": [item(f"BV{i}", i) for i in range(100)]},  # 满页 → 继续
+        {"code": 0, "data": [item("BVX", 99)]},  # 短页 → 停止
     ]
-    requested_max_ids = []
+    requested_pns = []
 
     def handler(request):
-        requested_max_ids.append(request.url.params.get("max_id"))
+        requested_pns.append(request.url.params.get("pn"))
         return httpx.Response(200, json=responses.pop(0))
 
     rows = h.fetch_history(make_client(handler))
-    assert len(rows) == 2
-    assert requested_max_ids == [None, "50", "25"]
+    assert len(rows) == 101
+    assert requested_pns == ["1", "2"]

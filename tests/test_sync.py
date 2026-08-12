@@ -9,7 +9,7 @@ from app import config
 
 
 def hist_item(bvid, view_at):
-    return {"bvid": bvid, "title": f"T-{bvid}", "up_mid": 1, "up_name": "UP甲",
+    return {"bvid": bvid, "title": f"T-{bvid}", "owner": {"mid": 1, "name": "UP甲"},
             "view_at": view_at, "progress": 10, "duration": 100, "pic": "", "tname": "动画", "ctime": 1}
 
 
@@ -21,7 +21,7 @@ def test_sync_history_and_dedup(tmp_path):
     class FakeClient:
         def get_json(self, path, params=None):
             if path == "/x/v2/history":
-                return {"code": 0, "data": {"list": [hist_item("BV1", 100), hist_item("BV2", 99)], "max_id": None}}
+                return {"code": 0, "data": [hist_item("BV1", 100), hist_item("BV2", 99)]}
             raise AssertionError(f"unexpected path {path}")
 
     n = sync.sync_history(conn, FakeClient())  # type: ignore

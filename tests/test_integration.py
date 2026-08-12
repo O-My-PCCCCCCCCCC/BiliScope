@@ -22,10 +22,10 @@ def make_sync_client():
     """一个完整的 mock B 站客户端，覆盖同步所需全部接口。"""
     responses = {
         "/x/web-interface/nav": {"code": 0, "data": {"isLogin": True, "mid": 123}},
-        "/x/v2/history": {"code": 0, "data": {"list": [
-            {"bvid": "BV1", "title": "历史一", "author_mid": 1, "author_name": "UP甲",
+        "/x/v2/history": {"code": 0, "data": [
+            {"bvid": "BV1", "title": "历史一", "owner": {"mid": 1, "name": "UP甲"},
              "view_at": 100, "progress": 50, "duration": 300, "pic": "", "tname": "动画", "ctime": 1},
-        ], "max_id": None}},
+        ]},
         "/x/v3/fav/folder/created/list-all": {"code": 0, "data": {"list": [
             {"id": 101, "title": "动画", "media_count": 1, "ctime": 1},
         ]}},
