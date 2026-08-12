@@ -4,15 +4,17 @@ from __future__ import annotations
 from app.bilibili.client import BiliClient
 
 
-def fetch_folders(client: BiliClient) -> list[dict]:
-    data = client.get_json("/x/v3/fav/folder/created/list-all")
+def fetch_folders(client: BiliClient, up_mid: int) -> list[dict]:
+    data = client.get_json(
+        "/x/v3/fav/folder/created/list-all", {"up_mid": up_mid}
+    )
     folders = data.get("data", {}).get("list") or []
     return [
         {
             "media_id": fl["id"],
             "name": fl.get("title", ""),
             "count": fl.get("media_count", 0),
-            "created_at": fl.get("ctime", 0),
+            "created_at": fl.get("ctime") or 0,
         }
         for fl in folders
     ]

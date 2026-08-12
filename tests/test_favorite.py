@@ -20,7 +20,7 @@ def test_fetch_folders():
             ]},
         })
 
-    folders = f.fetch_folders(make_client(handler))
+    folders = f.fetch_folders(make_client(handler), 123)
     assert folders == [
         {"media_id": 101, "name": "动画", "count": 12, "created_at": 1700000000},
         {"media_id": 102, "name": "科技", "count": 5, "created_at": 1700000100},

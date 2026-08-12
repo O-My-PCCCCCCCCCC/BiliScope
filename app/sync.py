@@ -38,8 +38,8 @@ def sync_history(conn: sqlite3.Connection, client: BiliClient) -> int:
     return n
 
 
-def sync_favorites(conn: sqlite3.Connection, client: BiliClient) -> int:
-    folders = favorite_mod.fetch_folders(client)
+def sync_favorites(conn: sqlite3.Connection, client: BiliClient, uid: int) -> int:
+    folders = favorite_mod.fetch_folders(client, uid)
     conn.executemany(
         "INSERT OR REPLACE INTO fav_folders (media_id, name, count, created_at) VALUES (?, ?, ?, ?)",
         [(f["media_id"], f["name"], f["count"], f["created_at"]) for f in folders],
@@ -100,10 +100,10 @@ def run_full_sync(client: BiliClient | None = None) -> dict:
     conn = get_conn()
     init_db(conn)
     try:
-        n_hist = sync_history(conn, client)
-        n_fav = sync_favorites(conn, client)
         nav = client.get_json("/x/web-interface/nav")
         uid = nav.get("data", {}).get("mid", 0)
+        n_hist = sync_history(conn, client)
+        n_fav = sync_favorites(conn, client, uid) if uid else 0
         n_fol = sync_followings(conn, client, uid) if uid else 0
         if uid:
             cfg = load_config()

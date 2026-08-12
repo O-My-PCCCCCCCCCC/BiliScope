@@ -63,7 +63,7 @@ def test_database_seeded_from_client():
     from app import sync
     conn = database.get_conn()
     n_h = sync.sync_history(conn, make_sync_client())
-    n_f = sync.sync_favorites(conn, make_sync_client())
+    n_f = sync.sync_favorites(conn, make_sync_client(), uid=123)
     assert n_h == 1 and n_f == 1
     conn.commit()
     conn.close()

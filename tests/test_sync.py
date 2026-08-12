@@ -52,7 +52,7 @@ def test_sync_favorites_and_followings(tmp_path):
             raise AssertionError(f"unexpected path {path}")
 
     client = FakeClient()  # type: ignore
-    n_fav = sync.sync_favorites(conn, client)
+    n_fav = sync.sync_favorites(conn, client, uid=123)
     n_fol = sync.sync_followings(conn, client, uid=123)
     assert n_fav == 1
     assert n_fol == 2
