@@ -67,7 +67,12 @@ BiliScope/
 │   ├── monitor.py         # 失效检测、UP 主更新检测
 │   ├── report.py          # 周报/月报生成
 │   ├── notify.py          # 邮件通知 + Web 提醒入库
-│   └── analyze.py         # 统计聚合逻辑（图表数据源）
+│   ├── analyze.py         # 统计聚合逻辑（图表数据源）
+│   └── llm/               # 可插拔 LLM 提供层（M4）
+│       ├── base.py        # LLMClient 抽象接口 + VideoTags 输出模型
+│       ├── anthropic_provider.py
+│       ├── openai_provider.py   # OpenAI 兼容（DeepSeek 等）
+│       └── ollama_provider.py   # 本地 Ollama
 ├── web/                   # 前端静态资源（Vue3 CDN 单页应用）
 │   ├── index.html
 │   ├── css/
@@ -190,7 +195,10 @@ python run.py
 用户新增需求：**不只统计分区，还要理解每个视频讲了什么内容，按内容主题归类，报告哪类占多数。**
 
 **已确认方案：**
-- 引擎：Claude API（Anthropic）
+- 引擎：**可插拔 LLM 提供层**（`app/llm/`），统一接口，配置切换 provider：
+  - **Anthropic Claude**：官方 `anthropic` SDK + 结构化输出（`messages.parse()` + Pydantic）
+  - **OpenAI 兼容**（DeepSeek / 通义 / Kimi / 智谱 / 硅基流动…）：`openai` SDK + `base_url` 切换，`response_format=json_object`
+  - **Ollama 本地**：`requests` 直连 `localhost:11434`，`format:"json"`，免费离线
 - 输入：每个视频的 **标题 + 简介**
 - 输出：每视频 3-5 个中文内容标签 + 一句话摘要
 
@@ -214,11 +222,19 @@ videos 表迁移：`ALTER TABLE videos ADD COLUMN desc TEXT`
 
 **配置（config.json）：**
 ```json
-"claude": { "api_key": "", "model": "claude-opus-5" }
+"llm": {
+  "provider": "anthropic | openai | ollama",
+  "api_key": "",
+  "base_url": "",
+  "model": "claude-haiku-4-5 / deepseek-chat / llama3.2"
+}
 ```
+provider 与模型由用户在设置页选择；openai provider 的 base_url 填对应服务商地址（如 DeepSeek `https://api.deepseek.com/v1`）。
 
 **技术要点：**
-- 官方 `anthropic` SDK + 结构化输出（`client.messages.parse()` + Pydantic），标签格式稳定可解析
+- `app/llm/base.py` 定义统一接口 `LLMClient.analyze_video(title, desc) -> VideoTags`（Pydantic 模型：tags + summary），各 provider 独立实现；`app/llm/__init__.py` 提供工厂函数按 config 选择
+- 结构化输出保证标签稳定可解析：Anthropic 用 `messages.parse()` + Pydantic；OpenAI 兼容用 `response_format=json_object` + JSON 解析校验（兼容 DeepSeek 等不完整结构输出）；Ollama 用 `format:"json"`
+- 新增依赖：`anthropic`、`openai`
 - 已分析视频去重（`analyzed_at`），重跑不重复扣费
 - 分析范围可配置（默认最近 N 条，避免一次性全量造成高额费用）
-- 模型可在 `claude-opus-5`（质量优先）与 `claude-haiku-4-5`（成本约 1/5，对短文本打标签足够）间切换，用户自选
+- Claude 默认 `claude-haiku-4-5`（此类短文本打标签足够、成本低），用户可按需切 `claude-opus-5`
