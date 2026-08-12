@@ -11,9 +11,24 @@ class VideoTags(BaseModel):
     summary: str
 
 
+class ToolCall(BaseModel):
+    id: str
+    name: str
+    arguments: dict
+
+
+class ChatResult(BaseModel):
+    text: str = ""
+    tool_calls: list[ToolCall] = []
+
+
 class LLMClient(ABC):
     @abstractmethod
     def analyze_video(self, title: str, desc: str) -> VideoTags:
+        ...
+
+    @abstractmethod
+    def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ChatResult:
         ...
 
 

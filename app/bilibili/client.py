@@ -52,6 +52,22 @@ class BiliClient:
         signed = wbi.sign_wbi(self, params or {})
         return self.get_json(path, signed)
 
+    def post_json(self, path: str, data: dict | None = None) -> dict:
+        """POST 表单请求，自动附加 bili_jct CSRF。"""
+        data = dict(data or {})
+        jct = self.session.cookies.get("bili_jct")
+        if jct and "csrf" not in data:
+            data["csrf"] = jct
+        resp = self.session.post(path, data=data)
+        resp.raise_for_status()
+        body = resp.json()
+        if body.get("code") not in (0, None):
+            raise BiliError(
+                f"{path} 返回错误: code={body.get('code')} {body.get('message', '')}",
+                code=body.get("code"),
+            )
+        return body
+
     def close(self) -> None:
         self.session.close()
 

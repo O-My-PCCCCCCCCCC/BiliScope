@@ -39,6 +39,10 @@ class ConfigPayload(BaseModel):
     smtp: SmtpPayload | None = None
     llm: LlmPayload | None = None
 
+
+class ChatPayload(BaseModel):
+    message: str
+
 router = APIRouter(prefix="/api")
 
 # 登录会话缓存：qrcode_key -> QRLogin，保证 generate/poll 共用同一 session
@@ -352,6 +356,32 @@ def img_proxy(url: str = Query(...)) -> Response:
         media_type=_sniff_ct(content),
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+@router.post("/chat")
+def chat_post(payload: ChatPayload) -> dict:
+    if not get_cookies():
+        raise HTTPException(status_code=401, detail="未登录，请先扫码登录")
+    llm_cfg = load_config().get("llm") or {}
+    if not llm_cfg.get("provider"):
+        raise HTTPException(status_code=400, detail="未配置 LLM，请先在设置中选择")
+    from app import chat as chat_mod
+    result = chat_mod.run_chat(get_llm_client(llm_cfg), chat_mod.get_history(), payload.message)
+    chat_mod.set_history(result["messages"])
+    return {"reply": result["reply"], "tool_uses": result["tool_uses"]}
+
+
+@router.get("/chat/history")
+def chat_history() -> dict:
+    from app import chat as chat_mod
+    return {"messages": chat_mod.get_history()}
+
+
+@router.post("/chat/reset")
+def chat_reset() -> dict:
+    from app import chat as chat_mod
+    chat_mod.reset_session()
+    return {"ok": True}
 
 
 @router.post("/sync")

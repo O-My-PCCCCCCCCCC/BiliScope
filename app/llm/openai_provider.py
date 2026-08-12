@@ -5,7 +5,7 @@ import json
 
 from openai import OpenAI
 
-from app.llm.base import LLMClient, PROMPT, VideoTags
+from app.llm.base import ChatResult, LLMClient, PROMPT, ToolCall, VideoTags
 
 
 class OpenAIClient(LLMClient):
@@ -26,3 +26,17 @@ class OpenAIClient(LLMClient):
         text = resp.choices[0].message.content
         data = json.loads(text)
         return VideoTags(tags=data["tags"], summary=data["summary"])
+
+    def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ChatResult:
+        kw: dict = {"model": self.model, "messages": messages}
+        if tools:
+            kw["tools"] = tools
+        resp = self.client.chat.completions.create(**kw)
+        msg = resp.choices[0].message
+        tool_calls = []
+        for tc in msg.tool_calls or []:
+            tool_calls.append(ToolCall(
+                id=tc.id, name=tc.function.name,
+                arguments=json.loads(tc.function.arguments or "{}"),
+            ))
+        return ChatResult(text=msg.content or "", tool_calls=tool_calls)
