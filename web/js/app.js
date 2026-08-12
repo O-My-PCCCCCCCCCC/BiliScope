@@ -7,6 +7,24 @@ async function api(path, options = {}) {
   return data;
 }
 
+// 共用环形图配置（confine 防止 tooltip 被裁剪）
+const PIE_COLORS = ['#fb7299', '#f6c445', '#7ecbf2', '#9cd6a5', '#b9a6ff', '#f2918e', '#66c7b8', '#d9a0ff', '#8fc1e3', '#e3b0ff'];
+function pieOption(title, data) {
+  return {
+    title: { text: title, textStyle: { fontSize: 14 } },
+    tooltip: { trigger: 'item', confine: true, formatter: '{b}<br/>{c} 个（{d}%）' },
+    legend: { orient: 'vertical', left: 'left', top: 'middle', textStyle: { color: '#999', fontSize: 11 } },
+    color: PIE_COLORS,
+    series: [{
+      type: 'pie', radius: ['38%', '62%'], center: ['60%', '55%'],
+      itemStyle: { borderRadius: 4, borderColor: '#1a1a1a', borderWidth: 2 },
+      label: { show: false },
+      emphasis: { label: { show: true, fontSize: 13, fontWeight: 'bold' } },
+      data,
+    }],
+  };
+}
+
 // B 站 CDN 防盗链，统一走后端图片代理；追加缩略图参数，4K 下大幅降低解码/缩放开销
 const imgUrl = u => {
   if (!u) return '';
@@ -146,10 +164,7 @@ const DeepAnalysis = {
           xAxis: { type: 'category', data: monthly.map(x => x.ym) }, yAxis: { type: 'value' },
           series: [{ type: 'line', smooth: true, areaStyle: {}, data: monthly.map(x => x.n) }],
         });
-        mk('[data-favTname]', {
-          title: { text: '收藏分区分布', textStyle: { fontSize: 14 } }, tooltip: { trigger: 'item' },
-          series: [{ type: 'pie', radius: '60%', data: favTnames.map(x => ({ name: x.tname, value: x.n })) }],
-        });
+        mk('[data-favTname]', pieOption('收藏分区分布', favTnames.map(x => ({ name: x.tname, value: x.n }))));
         (async () => {
           const dd = await api('/analysis/deep').catch(() => null);
           if (dd) {
@@ -172,10 +187,9 @@ const DeepAnalysis = {
         })();
         // 详细分析
         if (detailed) {
-          const pie = (data, sel, title) => mk(sel, {
-            title: { text: title, textStyle: { fontSize: 14 } }, tooltip: { trigger: 'item' },
-            series: [{ type: 'pie', data: data.map(x => ({ name: x.bucket || x.kind, value: x.n })) }],
-          });
+          const pie = (data, sel, title) => mk(sel, pieOption(
+            title, data.map(x => ({ name: x.bucket || x.kind, value: x.n }))
+          ));
           pie(detailed.completion, '[data-completion]', '观看完整度');
           pie(detailed.time_buckets, '[data-timebuckets]', '观看时段');
           pie(detailed.popularity, '[data-popularity]', '热门 vs 小众');
@@ -435,18 +449,17 @@ const Overview = {
           const el = this.$refs[refName];
           if (!el) continue;
           const chart = echarts.init(el, 'dark');
-          const axis = spec.type === 'pie'
-            ? {}
-            : {
-                xAxis: { type: 'category', data: spec.x, axisLabel: { rotate: spec.x.length > 8 ? 30 : 0 } },
-                yAxis: { type: 'value' },
-              };
-          chart.setOption({
-            title: { text: spec.title, textStyle: { fontSize: 14 } },
-            tooltip: { trigger: 'axis' },
-            ...axis,
-            series: [{ type: spec.type, data: spec.y || spec.data, smooth: true }],
-          });
+          if (spec.type === 'pie') {
+            chart.setOption(pieOption(spec.title, spec.data));
+          } else {
+            chart.setOption({
+              title: { text: spec.title, textStyle: { fontSize: 14 } },
+              tooltip: { trigger: 'axis', confine: true },
+              xAxis: { type: 'category', data: spec.x, axisLabel: { rotate: spec.x.length > 8 ? 30 : 0 } },
+              yAxis: { type: 'value' },
+              series: [{ type: spec.type, data: spec.y || spec.data, smooth: true }],
+            });
+          }
         }
       });
     },
