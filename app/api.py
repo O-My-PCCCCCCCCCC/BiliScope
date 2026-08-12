@@ -11,7 +11,7 @@ from app.bilibili import login as login_mod
 from app.bilibili.client import BiliError, UA
 from app.config import get_cookies, load_config, save_config
 from app.database import get_conn, init_db
-from app.hardware import detect_hardware, recommend_ollama_model
+from app.hardware import detect_hardware, recommend_models, recommend_ollama_model
 from app.llm import get_llm_client
 from app.monitor import check_invalid, check_updates
 from app.report import generate_report
@@ -315,6 +315,43 @@ def hardware() -> dict:
     hw = detect_hardware()
     hw["recommended_model"] = recommend_ollama_model(hw)
     return hw
+
+
+@router.get("/models/recommend")
+def models_recommend() -> dict:
+    hw = detect_hardware()
+    models = recommend_models(hw, max_ram_ratio=0.85, limit=5)
+    from app.ollama_manager import ollama_installed
+    return {
+        "hardware": {"cpu": hw.get("cpu"), "ram_gb": hw.get("ram_gb"), "gpu": hw.get("gpu")},
+        "max_ram_ratio": 0.85,
+        "ollama_installed": ollama_installed(),
+        "models": models,
+    }
+
+
+@router.post("/models/install")
+def models_install(payload: dict) -> dict:
+    model = (payload or {}).get("model", "")
+    if not model:
+        raise HTTPException(status_code=400, detail="缺少 model 参数")
+    from app.ollama_manager import start_model_install
+    result = start_model_install(model)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    # 安装完成后设为默认本地模型
+    cfg = load_config()
+    llm = cfg.setdefault("llm", {})
+    llm["provider"] = "ollama"
+    llm["model"] = model
+    save_config(cfg)
+    return {"ok": True}
+
+
+@router.get("/models/install-status")
+def models_install_status() -> dict:
+    from app.ollama_manager import install_status
+    return install_status()
 
 
 @router.get("/img")

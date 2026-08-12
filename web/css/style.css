@@ -44,3 +44,5 @@ h2 { margin: 8px 0 16px; font-size: 20px; }
 .chat-msg.tool { justify-content: center; }
 .chat-msg.tool .chat-bubble { background: transparent; color: #999; font-size: 12px; padding: 2px 4px; }
 .chat-input { display: flex; gap: 8px; }
+.model-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #2a2a2a; }
+.model-info { flex: 1; }

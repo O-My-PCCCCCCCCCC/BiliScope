@@ -553,6 +553,22 @@ const Settings = {
           <el-button @click="recommendLocal" :loading="hwLoading">检测硬件推荐模型</el-button>
         </el-form-item>
         <el-form-item v-if="hwModel"><el-tag type="success">推荐：{{ hwModel }}</el-tag></el-form-item>
+        <el-divider/>
+        <el-button @click="recommendModels" :loading="modelLoading">按资源占比选择模型（本地安装）</el-button>
+        <div v-if="modelList.length" style="margin-top:8px">
+          <div class="model-row" v-for="m in modelList" :key="m.name">
+            <div class="model-info">
+              <b>{{ m.name }}</b>
+              <span style="color:#999;font-size:12px;margin-left:8px">占用 ~{{ m.est_ram_gb }}G 内存 · 磁盘 {{ m.disk_gb }}G</span>
+            </div>
+            <el-button size="small" type="primary" :loading="installing === m.name" @click="installModel(m.name)">后台安装</el-button>
+          </div>
+          <div v-if="!ollamaOk" style="color:#e6a23c;font-size:12px;margin-top:6px">⚠️ 未检测到 Ollama，请先安装</div>
+          <div v-if="installState.state === 'running'" style="margin-top:8px">
+            <el-progress :percentage="installState.progress"/>
+            <div style="color:#999;font-size:12px">{{ installState.message }}</div>
+          </div>
+        </div>
       </el-form>
     </el-card>
     <el-dialog v-model="qrVisible" title="扫码登录 B 站" width="340px" @closed="stopPoll">
@@ -620,6 +636,43 @@ const Settings = {
         ElementPlus.ElMessage.success(`推荐 ${h.recommended_model}（内存 ${h.ram_gb}G / 显存 ${(h.gpu[0]?.vram_gb || 0)}G）`);
       } finally { hwLoading.value = false; }
     }
+    const modelList = ref([]); const modelLoading = ref(false);
+    const installing = ref(''); const ollamaOk = ref(true);
+    const installState = ref({ state: 'idle', progress: 0, message: '' });
+    let installTimer = null;
+    async function recommendModels() {
+      modelLoading.value = true;
+      try {
+        const d = await api('/models/recommend');
+        modelList.value = d.models;
+        ollamaOk.value = d.ollama_installed;
+      } finally { modelLoading.value = false; }
+    }
+    async function installModel(name) {
+      installing.value = name;
+      try {
+        await api('/models/install', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: name }) });
+        ElementPlus.ElMessage.success('开始后台安装 ' + name);
+        pollInstall();
+      } catch (e) { ElementPlus.ElMessage.error(e.message); installing.value = ''; }
+    }
+    function pollInstall() {
+      if (installTimer) clearInterval(installTimer);
+      installTimer = setInterval(async () => {
+        try {
+          const s = await api('/models/install-status');
+          installState.value = s;
+          if (s.state === 'done') {
+            clearInterval(installTimer); installing.value = '';
+            ElementPlus.ElMessage.success('模型安装完成，可直接使用'); loadLlm();
+          } else if (s.state === 'error') {
+            clearInterval(installTimer); installing.value = '';
+            ElementPlus.ElMessage.error('安装失败：' + s.message);
+          }
+        } catch (e) {}
+      }, 1500);
+    }
     async function saveSmtp() {
       await api('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ smtp: smtp.value }) });
@@ -642,7 +695,9 @@ const Settings = {
     }
     onMounted(() => { loadConfig().catch(() => {}); loadAccount(); });
     return { qrVisible, qrMsg, syncing, smtp, testing, llm, hwLoading, hwModel, account,
-             fmt, openQr, stopPoll, sync, saveSmtp, testEmail, saveLlm, recommendLocal };
+             modelList, modelLoading, installing, ollamaOk, installState,
+             fmt, openQr, stopPoll, sync, saveSmtp, testEmail, saveLlm, recommendLocal,
+             recommendModels, installModel };
   },
 };
 
