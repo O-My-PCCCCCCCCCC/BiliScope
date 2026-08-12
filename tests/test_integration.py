@@ -90,3 +90,15 @@ def test_monitor_chain(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
     assert client.get("/api/status").json()["alerts_unread"] == 1
+
+
+def test_report_chain():
+    from app.report import generate_report
+    conn = database.get_conn()
+    result = generate_report(conn, "weekly")
+    conn.close()
+
+    items = client.get("/api/reports").json()
+    assert len(items) == 1
+    detail = client.get(f"/api/reports/{result['id']}").json()
+    assert detail["type"] == "weekly"
