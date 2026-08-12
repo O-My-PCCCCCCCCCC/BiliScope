@@ -4,14 +4,29 @@ from __future__ import annotations
 import time
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from app.bilibili import login as login_mod
 from app.bilibili.client import BiliError
-from app.config import get_cookies, load_config
+from app.config import get_cookies, load_config, save_config
 from app.database import get_conn, init_db
 from app.monitor import check_invalid, check_updates
 from app.report import generate_report
 from app.sync import run_full_sync
+
+MASKED = "******"
+
+
+class SmtpPayload(BaseModel):
+    host: str | None = None
+    port: int | None = None
+    user: str | None = None
+    password: str | None = None
+    to: str | None = None
+
+
+class ConfigPayload(BaseModel):
+    smtp: SmtpPayload | None = None
 
 router = APIRouter(prefix="/api")
 
@@ -176,6 +191,43 @@ def report_detail(report_id: int) -> dict:
     d = dict(row)
     d["stats"] = json.loads(d.pop("content_json"))
     return d
+
+
+@router.get("/config")
+def config_get() -> dict:
+    cfg = load_config()
+    smtp = dict(cfg.get("smtp") or {})
+    smtp["password"] = MASKED if smtp.get("password") else ""
+    return {"smtp": smtp, "task_interval": cfg.get("task_interval")}
+
+
+@router.post("/config")
+def config_save(payload: ConfigPayload) -> dict:
+    cfg = load_config()
+    smtp = cfg.setdefault("smtp", {})
+    if payload.smtp:
+        data = payload.smtp.model_dump()
+        for k in ("host", "port", "user", "to"):
+            if data.get(k) is not None:
+                smtp[k] = data[k]
+        pw = data.get("password")
+        if pw and pw != MASKED:
+            smtp["password"] = pw
+    save_config(cfg)
+    return {"ok": True}
+
+
+@router.post("/config/test-email")
+def config_test_email() -> dict:
+    from app.emailer import send_email
+    cfg = load_config().get("smtp") or {}
+    if not (cfg.get("host") and cfg.get("user") and cfg.get("password") and cfg.get("to")):
+        raise HTTPException(status_code=400, detail="SMTP 配置不完整")
+    try:
+        send_email(cfg, "BiliScope 测试邮件", "<p>邮件配置正常 ✅</p>")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"发送失败: {e}")
+    return {"ok": True}
 
 
 @router.post("/sync")

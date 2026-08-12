@@ -251,6 +251,20 @@ const Settings = {
         </el-button>
       </div>
     </el-card>
+    <el-card style="max-width:520px;margin-top:16px">
+      <template #header>邮件通知（SMTP）</template>
+      <el-form :model="smtp" label-width="80px" label-position="left">
+        <el-form-item label="SMTP 主机"><el-input v-model="smtp.host" placeholder="smtp.qq.com"/></el-form-item>
+        <el-form-item label="端口"><el-input v-model.number="smtp.port" placeholder="465"/></el-form-item>
+        <el-form-item label="邮箱"><el-input v-model="smtp.user" placeholder="发件邮箱"/></el-form-item>
+        <el-form-item label="授权码"><el-input v-model="smtp.password" type="password" placeholder="SMTP 授权码"/></el-form-item>
+        <el-form-item label="收件人"><el-input v-model="smtp.to" placeholder="收件邮箱"/></el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="saveSmtp">保存配置</el-button>
+          <el-button @click="testEmail" :loading="testing">发送测试邮件</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
     <el-dialog v-model="qrVisible" title="扫码登录 B 站" width="340px" @closed="stopPoll">
       <div id="qrcode" style="display:flex;justify-content:center"></div>
       <p style="text-align:center;margin-top:12px">{{ qrMsg }}</p>
@@ -258,6 +272,8 @@ const Settings = {
   `,
   setup(props, { emit }) {
     const qrVisible = ref(false); const qrMsg = ref('等待扫码'); const syncing = ref(false);
+    const smtp = ref({ host: '', port: 465, user: '', password: '', to: '' });
+    const testing = ref(false);
     const fmt = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN') : '';
     let timer = null; let qrKey = '';
     async function openQr() {
@@ -294,7 +310,26 @@ const Settings = {
       } catch (e) { ElementPlus.ElMessage.error(e.message); }
       finally { syncing.value = false; }
     }
-    return { qrVisible, qrMsg, syncing, fmt, openQr, stopPoll, sync };
+    async function loadConfig() {
+      const c = await api('/config');
+      smtp.value = { ...c.smtp };
+    }
+    async function saveSmtp() {
+      await api('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ smtp: smtp.value }) });
+      ElementPlus.ElMessage.success('配置已保存');
+      emit('refresh');
+    }
+    async function testEmail() {
+      testing.value = true;
+      try {
+        await api('/config/test-email', { method: 'POST' });
+        ElementPlus.ElMessage.success('测试邮件已发送');
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+      finally { testing.value = false; }
+    }
+    onMounted(() => { loadConfig().catch(() => {}); });
+    return { qrVisible, qrMsg, syncing, smtp, testing, fmt, openQr, stopPoll, sync, saveSmtp, testEmail };
   },
 };
 
