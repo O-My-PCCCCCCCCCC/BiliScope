@@ -9,6 +9,7 @@ from app.bilibili import login as login_mod
 from app.bilibili.client import BiliError
 from app.config import get_cookies, load_config
 from app.database import get_conn, init_db
+from app.monitor import check_invalid, check_updates
 from app.sync import run_full_sync
 
 router = APIRouter(prefix="/api")
@@ -91,6 +92,50 @@ def alert_read(alert_id: int) -> dict:
     finally:
         conn.close()
     return {"ok": True}
+
+
+@router.post("/monitor/run")
+def monitor_run() -> dict:
+    if not get_cookies():
+        raise HTTPException(status_code=401, detail="未登录，请先扫码登录")
+    conn = get_conn()
+    init_db(conn)
+    try:
+        from app.bilibili.client import BiliClient
+        with BiliClient(cookies=get_cookies()) as client:
+            n_invalid = check_invalid(conn, client, limit=100)
+            n_updates = check_updates(conn, client, limit=20)
+    finally:
+        conn.close()
+    return {"invalid": n_invalid, "updates": n_updates}
+
+
+@router.get("/monitor/invalid")
+def monitor_invalid() -> list:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM invalid_items ORDER BY checked_at DESC LIMIT 200"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+@router.get("/monitor/updates")
+def monitor_updates() -> list:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        rows = conn.execute(
+            """SELECT u.*, f.uname FROM updates u
+               JOIN followings f ON u.mid = f.mid
+               ORDER BY u.checked_at DESC LIMIT 200"""
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
 
 
 @router.post("/sync")
