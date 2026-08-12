@@ -4,8 +4,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-_db_path: Path = ROOT / "data" / "bili.db"
+from app.config import DATA_DIR
+_db_path: Path = DATA_DIR / "data" / "bili.db"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS videos (

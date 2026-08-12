@@ -10,7 +10,7 @@ import threading
 
 import httpx
 
-from app.config import ROOT
+from app.config import DATA_DIR
 
 _install_status: dict = {"state": "idle", "phase": "", "model": "",
                          "progress": 0, "message": ""}
@@ -101,7 +101,7 @@ def _install_ollama() -> None:
             _install_status.update({"state": "error",
                                     "message": f"{system} 系统请到 ollama.com/download 手动安装"})
             return
-        dest = ROOT / "data" / "ollama_setup.exe"
+        dest = DATA_DIR / "data" / "ollama_setup.exe"
         dest.parent.mkdir(parents=True, exist_ok=True)
         _set("下载 Ollama 安装包（约 700MB，请耐心等待）...", 0)
         urls = [

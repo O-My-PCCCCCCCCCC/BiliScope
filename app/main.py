@@ -2,15 +2,12 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.api import router as api_router
+from app.config import APP_DIR
 from app.database import init_db
-
-ROOT = Path(__file__).resolve().parent.parent
 
 
 @asynccontextmanager
@@ -23,4 +20,4 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="BiliScope", lifespan=lifespan)
 app.include_router(api_router)
-app.mount("/", StaticFiles(directory=str(ROOT / "web"), html=True), name="web")
+app.mount("/", StaticFiles(directory=str(APP_DIR / "web"), html=True), name="web")

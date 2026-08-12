@@ -464,9 +464,9 @@ def img_proxy(url: str = Query(...)) -> Response:
         raise HTTPException(status_code=400, detail="非法图片地址")
     import hashlib
     import httpx
-    from app.config import ROOT
+    from app.config import DATA_DIR
 
-    cache_dir = ROOT / "data" / "img_cache"
+    cache_dir = DATA_DIR / "data" / "img_cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     key = hashlib.md5(url.encode()).hexdigest()
     cache_path = cache_dir / f"{key}.img"

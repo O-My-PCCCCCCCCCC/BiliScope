@@ -4,9 +4,9 @@ from __future__ import annotations
 import shutil
 import threading
 
-from app.config import ROOT
+from app.config import DATA_DIR
 
-OUT_DIR = ROOT / "data" / "downloads"
+OUT_DIR = DATA_DIR / "data" / "downloads"
 
 _download_status: dict = {"state": "idle", "tasks": [], "current": "",
                           "progress": 0, "message": ""}
@@ -29,7 +29,7 @@ def list_downloads() -> list[str]:
 def _write_cookies() -> str:
     from app.config import get_cookies
     cookies = get_cookies()
-    path = ROOT / "data" / "cookies.txt"
+    path = DATA_DIR / "data" / "cookies.txt"
     lines = ["# Netscape HTTP Cookie File"]
     for k, v in cookies.items():
         lines.append(f".bilibili.com\tTRUE\t/\tFALSE\t0\t{k}\t{v}")

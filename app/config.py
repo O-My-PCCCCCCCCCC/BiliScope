@@ -2,12 +2,30 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
 
-_config_path: Path = ROOT / "config.json"
+def _app_dir() -> Path:
+    """应用资源目录（web 静态文件），PyInstaller 冻结时在 _MEIPASS。"""
+    if getattr(sys, "frozen", False):
+        return Path(getattr(sys, "_MEIPASS"))
+    return Path(__file__).resolve().parent.parent
+
+
+def _data_dir() -> Path:
+    """可写数据目录（config.json / data 数据库 / 缓存），冻结时在 exe 同目录。"""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+APP_DIR = _app_dir()
+DATA_DIR = _data_dir()
+ROOT = APP_DIR  # 兼容旧引用
+
+_config_path: Path = DATA_DIR / "config.json"
 
 DEFAULT_CONFIG: dict = {
     "cookies": {},
