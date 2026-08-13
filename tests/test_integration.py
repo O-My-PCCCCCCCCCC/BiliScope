@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+import time
 from fastapi.testclient import TestClient
 
 from app import config, database
@@ -117,3 +118,22 @@ def test_analysis_chain(monkeypatch):
 
     hw = client.get("/api/hardware").json()
     assert "recommended_model" in hw
+
+
+def test_insights_chain(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    conn.execute("INSERT INTO videos (bvid, title, tname, duration) VALUES ('BV1', 'A', '科技', 100)")
+    conn.execute("INSERT INTO history (bvid, view_at, progress) VALUES ('BV1', ?, 100)", (int(time.time()),))
+    conn.execute("INSERT INTO video_analysis (bvid, tags_json, summary, category) VALUES ('BV1', '[\"科技\"]', 's', '学习提升')")
+    conn.commit()
+    conn.close()
+
+    invest = client.get("/api/insights/invest").json()
+    assert invest["by_category"][0]["name"] == "学习提升"
+    assert invest["by_up"][0]["seconds"] == 100
+    cross = client.get("/api/insights/cross").json()
+    assert cross["categories"] == ["科技"]
+    interest = client.get("/api/insights/interest").json()
+    assert any(s["tag"] == "科技" for s in interest["series"])
