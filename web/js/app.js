@@ -474,7 +474,7 @@ const Insights = {
           legend: { type: 'scroll', textStyle: { color: '#999', fontSize: 10 }, top: 0 },
           xAxis: { type: 'category', data: interest.value.months },
           yAxis: { type: 'value' },
-          series: interest.value.series.map(s => ({ name: s.tag, type: 'line', stack: 'all', smooth: true, data: s.data })),
+          series: interest.value.series.map(s => ({ name: s.tag, type: 'line', stack: 'all', smooth: true, areaStyle: {}, data: s.data })),
         });
       });
     }
