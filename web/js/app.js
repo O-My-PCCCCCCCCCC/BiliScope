@@ -1838,14 +1838,15 @@ const App = {
   components: { ContentBrowser, Monitor, Analysis, Downloads, SearchResult, Chat, Settings },
   template: `
     <el-container class="layout">
-      <el-aside width="220px" class="aside">
+      <div v-if="isMobile && menuOpen" class="menu-backdrop" @click="menuOpen = false"></div>
+      <el-aside width="220px" class="aside" :class="{ open: isMobile && menuOpen }">
         <div class="logo">BiliScope<span class="logo-ver">v1.1</span></div>
         <div class="search-box">
           <el-input v-model="searchQ" placeholder="搜索视频 / UP主" clearable @keyup.enter="doSearch">
             <template #prefix><el-icon><Search/></el-icon></template>
           </el-input>
         </div>
-        <el-menu :default-active="route" @select="route = $event" class="menu">
+        <el-menu :default-active="route" @select="onMenuSelect" class="menu">
           <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>分析</el-menu-item>
           <el-menu-item index="content"><el-icon><FolderOpened/></el-icon>内容浏览</el-menu-item>
           <el-menu-item index="monitor"><el-icon><Bell/></el-icon>监测中心<el-badge :value="status.alerts_unread || 0" :hidden="!(status.alerts_unread)" class="menu-badge"/></el-menu-item>
@@ -1871,6 +1872,9 @@ const App = {
         </div>
       </el-aside>
       <el-main>
+        <div class="menu-toggle" v-if="isMobile" @click="menuOpen = !menuOpen">
+          <el-icon><Menu/></el-icon>
+        </div>
         <ContentBrowser v-if="route === 'content'"/>
         <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
         <Analysis v-else-if="route === 'analysis'"/>
@@ -1886,10 +1890,24 @@ const App = {
     const status = ref({ logged_in: false, counts: {} });
     const accountInfo = ref({ stats: null, coin_log: [] });
     const searchQ = ref('');
+    const menuOpen = ref(false);
+    const mq = window.matchMedia('(max-width: 900px)');
+    const isMobile = ref(mq.matches);
+    if (mq.addEventListener) {
+      mq.addEventListener('change', (e) => {
+        isMobile.value = e.matches;
+        if (!e.matches) menuOpen.value = false;
+      });
+    }
+    function onMenuSelect(index) {
+      route.value = index;
+      if (isMobile.value) menuOpen.value = false;
+    }
     function doSearch() {
       const q = searchQ.value.trim();
       if (!q) { ElementPlus.ElMessage.warning('请输入搜索内容'); return; }
       route.value = 'search';
+      if (isMobile.value) menuOpen.value = false;
     }
     const lvPct = Vue.computed(() => {
       const s = accountInfo.value.stats;
@@ -1901,7 +1919,8 @@ const App = {
       try { accountInfo.value = await api('/account'); } catch (e) {}
     }
     onMounted(loadStatus);
-    return { route, status, accountInfo, lvPct, loadStatus, imgUrl, searchQ, doSearch };
+    return { route, status, accountInfo, lvPct, loadStatus, imgUrl, searchQ, doSearch,
+             menuOpen, isMobile, onMenuSelect };
   },
 };
 
