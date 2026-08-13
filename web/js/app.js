@@ -399,7 +399,7 @@ const Analysis = {
     async function run() {
       running.value = true;
       try {
-        const r = await api('/analysis/run?limit=50');
+        const r = await api('/analysis/run?limit=50', { method: 'POST' });
         ElementPlus.ElMessage.success(`分析完成：${r.analyzed} 条`);
         await loadStatus();
         renderChart();
