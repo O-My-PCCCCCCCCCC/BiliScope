@@ -27,7 +27,7 @@ def test_time_invest(tmp_path):
     assert by_up["UP乙"] == 200
     by_cat = {r["name"]: r["seconds"] for r in result["by_category"]}
     assert by_cat["学习提升"] == 3000
-    assert by_cat["其他"] == 1200     # BV2(1000) + BV3(200) 无 category
+    assert by_cat["未分类"] == 1200     # BV2(1000) + BV3(200) 无 category
     by_tag = {r["name"]: r["seconds"] for r in result["by_tag"]}
     assert by_tag["AI"] == 3000
 

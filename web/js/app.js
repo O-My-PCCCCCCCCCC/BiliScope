@@ -437,6 +437,17 @@ const Analysis = {
       </el-col>
     </el-row>
 
+    <el-row :gutter="12" class="cards" style="margin-bottom:16px">
+      <el-col :span="8"><el-card><div class="card-num">{{ compare.this?.views ?? '-' }}</div><div class="card-label">本月观看（上月 {{ compare.last?.views ?? '-' }}）</div></el-card></el-col>
+      <el-col :span="8"><el-card><div class="card-num">{{ compare.this?.days ?? '-' }}</div><div class="card-label">本月活跃天数（上月 {{ compare.last?.days ?? '-' }}）</div></el-card></el-col>
+      <el-col :span="8"><el-card><div class="card-num">{{ favGrowthLast }}</div><div class="card-label">本月新增收藏</div></el-card></el-col>
+    </el-row>
+
+    <el-row :gutter="12" style="margin-bottom:16px">
+      <el-col :span="12"><el-card><div data-monthly class="chart"></div></el-card></el-col>
+      <el-col :span="12"><el-card><div data-favgrowth class="chart"></div></el-card></el-col>
+    </el-row>
+
     <el-card style="margin-bottom:16px">
       <template #header>⏱️ 时间花在哪</template>
       <div v-if="investTip" style="color:#e6a23c;font-size:13px;margin-bottom:10px">{{ investTip }}</div>
@@ -500,6 +511,33 @@ const Analysis = {
       <div data-calendar class="chart" style="height:150px"></div>
     </el-card>
 
+    <el-row :gutter="12" style="margin-bottom:16px">
+      <el-col :span="12"><el-card><div data-topup class="chart"></div></el-card></el-col>
+      <el-col :span="12"><el-card>
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span>UP主粉丝数（快照）</span>
+            <el-button size="small" type="primary" @click="collectFollowers" :loading="followerLoading">采集快照</el-button>
+          </div>
+        </template>
+        <el-table :data="upFollowers" size="small" max-height="240" style="width:100%">
+          <el-table-column prop="uname" label="UP主" show-overflow-tooltip/>
+          <el-table-column label="粉丝数" width="100">
+            <template #default="s">{{ fmtNum(s.row.points[s.row.points.length - 1]?.follower) }}</template>
+          </el-table-column>
+          <el-table-column label="快照" width="70">
+            <template #default="s">{{ s.row.points.length }} 次</template>
+          </el-table-column>
+        </el-table>
+      </el-card></el-col>
+    </el-row>
+
+    <el-row :gutter="12" style="margin-bottom:16px">
+      <el-col :span="8"><el-card><div data-completion class="chart"></div></el-card></el-col>
+      <el-col :span="8"><el-card><div data-popularity class="chart"></div></el-card></el-col>
+      <el-col :span="8"><el-card><div data-weekend class="chart"></div></el-card></el-col>
+    </el-row>
+
     <el-card>
       <template #header>分析管理</template>
       <div v-if="!status.total" style="color:#e6a23c;font-size:12px;margin-bottom:10px">
@@ -528,9 +566,30 @@ const Analysis = {
     const upDepth = ref([]);
     const aiReport = ref({ narrative: '', findings: [] });
     const aiLoading = ref(false);
+    const monthly = ref([]);
+    const topUps = ref([]);
+    const compare = ref({ this: null, last: null });
+    const favGrowth = ref([]);
+    const upFollowers = ref([]);
+    const followerLoading = ref(false);
+    const det = ref({ completion: [], popularity: [], weekday_weekend: [] });
     const running = ref(false); const status = ref({ analyzed: 0, total: 0 });
     const runState = ref({ state: 'idle', progress: 0, message: '', total: 0 });
     let runTimer = null;
+    const favGrowthLast = Vue.computed(() => {
+      const arr = favGrowth.value;
+      return arr.length ? arr[arr.length - 1].n : '-';
+    });
+    function fmtNum(n) { n = n || 0; return n >= 10000 ? (n / 10000).toFixed(1).replace(/\.0$/, '') + '万' : String(n); }
+    async function collectFollowers() {
+      followerLoading.value = true;
+      try {
+        const r = await api('/analysis/up-followers', { method: 'POST' });
+        upFollowers.value = r.trend;
+        ElementPlus.ElMessage.success(`已采集 ${r.collected} 个UP主粉丝数`);
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+      finally { followerLoading.value = false; }
+    }
 
     function mk(sel, option) {
       const el = document.querySelector(sel);
@@ -605,6 +664,33 @@ const Analysis = {
           series: [{ type: 'heatmap', coordinateSystem: 'calendar', data: cal.map(x => [x.day, x.n]) }],
         });
       }
+      mk('[data-monthly]', {
+        title: { text: '月度观看趋势', textStyle: { fontSize: 14 } },
+        tooltip: { trigger: 'axis', confine: true },
+        xAxis: { type: 'category', data: monthly.value.map(x => x.ym) },
+        yAxis: { type: 'value' },
+        series: [{ type: 'line', smooth: true, areaStyle: {}, data: monthly.value.map(x => x.n), itemStyle: { color: '#fb7299' } }],
+      });
+      mk('[data-favgrowth]', {
+        title: { text: '收藏增长趋势', textStyle: { fontSize: 14 } },
+        tooltip: { trigger: 'axis', confine: true },
+        xAxis: { type: 'category', data: favGrowth.value.map(x => x.ym) },
+        yAxis: { type: 'value' },
+        series: [{ type: 'line', smooth: true, data: favGrowth.value.map(x => x.n), itemStyle: { color: '#f6c445' } }],
+      });
+      mk('[data-topup]', {
+        title: { text: '常看UP主 TOP', textStyle: { fontSize: 14 } },
+        tooltip: { trigger: 'axis', confine: true },
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: topUps.value.slice(0, 8).map(u => u.up_name), inverse: true },
+        series: [{ type: 'bar', data: topUps.value.slice(0, 8).map(u => u.n), itemStyle: { color: '#fb7299' }, barMaxWidth: 14 }],
+      });
+      const pie = (data, sel, title) => mk(sel, pieOption(
+        title, data.map(x => ({ name: x.bucket || x.kind, value: x.n }))
+      ));
+      pie(det.value.completion, '[data-completion]', '观看完整度');
+      pie(det.value.popularity, '[data-popularity]', '热门 vs 小众');
+      pie(det.value.weekday_weekend, '[data-weekend]', '工作日 vs 周末');
     }
     function renderCross() {
       const d = cross.value;
@@ -670,12 +756,22 @@ const Analysis = {
         streak.value = d.streak; night.value = d.night; upDepth.value = d.up_depth;
       }
       graveyardItems.value = await api('/analysis/graveyard-list').catch(() => []);
+      const [ov, mo, cmp, uf, dd] = await Promise.all([
+        api('/stats/overview'), api('/analysis/monthly'), api('/analysis/compare'),
+        api('/analysis/up-followers'), api('/analysis/detailed'),
+      ]).catch(() => [null, [], null, [], null]);
+      if (ov) topUps.value = ov.top_ups || [];
+      monthly.value = mo;
+      if (cmp) { compare.value = cmp.compare; favGrowth.value = cmp.fav_growth || []; }
+      upFollowers.value = uf || [];
+      if (dd) det.value = dd;
       await loadStatus();
       nextTick(renderAll);
     }
     onMounted(loadAll);
     return { coreCards, investTip, aiReport, aiLoading, genAiReport, interest, cross, crossDim, renderCross,
-             night, graveyard, graveyardItems, repeat, streak, status, runState, run, rerunAll, running };
+             night, graveyard, graveyardItems, repeat, streak, status, runState, run, rerunAll, running,
+             compare, favGrowthLast, upFollowers, followerLoading, collectFollowers, fmtNum };
   },
 };
 
@@ -1721,7 +1817,7 @@ const SearchResult = {
 };
 
 const App = {
-  components: { Overview, ContentBrowser, Monitor, Analysis, Downloads, SearchResult, Chat, Settings },
+  components: { ContentBrowser, Monitor, Analysis, Downloads, SearchResult, Chat, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
@@ -1732,7 +1828,6 @@ const App = {
           </el-input>
         </div>
         <el-menu :default-active="route" @select="route = $event" class="menu">
-          <el-menu-item index="overview"><el-icon><DataLine/></el-icon>概览</el-menu-item>
           <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>分析</el-menu-item>
           <el-menu-item index="content"><el-icon><FolderOpened/></el-icon>内容浏览</el-menu-item>
           <el-menu-item index="monitor"><el-icon><Bell/></el-icon>监测中心<el-badge :value="status.alerts_unread || 0" :hidden="!(status.alerts_unread)" class="menu-badge"/></el-menu-item>
@@ -1758,8 +1853,7 @@ const App = {
         </div>
       </el-aside>
       <el-main>
-        <Overview v-if="route === 'overview'" :status="status" @refresh="loadStatus"/>
-        <ContentBrowser v-else-if="route === 'content'"/>
+        <ContentBrowser v-if="route === 'content'"/>
         <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
         <Analysis v-else-if="route === 'analysis'"/>
         <Downloads v-else-if="route === 'downloads'"/>
@@ -1770,7 +1864,7 @@ const App = {
     </el-container>
   `,
   setup() {
-    const route = ref('overview');
+    const route = ref('analysis');
     const status = ref({ logged_in: false, counts: {} });
     const accountInfo = ref({ stats: null, coin_log: [] });
     const searchQ = ref('');

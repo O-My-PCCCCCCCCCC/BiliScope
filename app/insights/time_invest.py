@@ -19,7 +19,8 @@ def time_invest(conn: sqlite3.Connection, top_n: int = 15) -> dict:
         secs = r["progress"] or r["duration"] or 0
         if secs <= 0:
             continue
-        cat = r["category"] or "其他"
+        # 没做过 LLM 分析的一律标「未分类」，避免和「其他」（LLM 确实归不出类）混淆
+        cat = r["category"] or "未分类"
         by_category[cat] = by_category.get(cat, 0) + secs
         up = r["up_name"] or "未知UP"
         by_up[up] = by_up.get(up, 0) + secs
