@@ -1249,29 +1249,49 @@ const Settings = {
         </el-form-item>
       </el-form>
     </el-card>
-    <el-dialog v-model="qrVisible" title="扫码登录 B 站" width="340px" @closed="stopPoll">
-      <div id="qrcode" style="display:flex;justify-content:center"></div>
-      <p style="text-align:center;margin-top:12px">{{ qrMsg }}</p>
+    <el-dialog v-model="qrVisible" title="扫码登录 B 站" width="360px" @closed="stopPoll" :close-on-click-modal="false">
+      <div style="display:flex;flex-direction:column;align-items:center;padding:6px 0">
+        <div id="qrcode" style="background:#fff;padding:14px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.18);display:flex;justify-content:center"></div>
+        <div style="margin-top:14px;display:flex;align-items:center;gap:8px">
+          <span class="qr-dot" :style="{ background: qrDotColor }"></span>
+          <span :style="{ color: qrDotColor, fontSize: '13px' }">{{ qrMsg }}</span>
+        </div>
+        <div style="color:#999;font-size:12px;margin-top:12px;line-height:1.9;text-align:center">
+          ① 打开手机 B 站 App<br/>
+          ② 点右上角「扫一扫」扫描上方二维码<br/>
+          ③ 手机上点击「确认登录」即完成
+        </div>
+        <el-button size="small" style="margin-top:14px" @click="openQr" :loading="qrRefreshing">刷新二维码</el-button>
+      </div>
     </el-dialog>
   `,
   setup(props, { emit }) {
     const qrVisible = ref(false); const qrMsg = ref('等待扫码'); const syncing = ref(false);
+    const qrStatus = ref('waiting'); const qrRefreshing = ref(false);
+    const qrDotColor = Vue.computed(() => ({
+      waiting: '#e6a23c', scanned: '#409eff', ok: '#67c23a', expired: '#f56c6c', error: '#f56c6c',
+    }[qrStatus.value] || '#e6a23c'));
     const smtp = ref({ host: '', port: 465, user: '', password: '', to: '' });
     const testing = ref(false);
     const fmt = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN') : '';
     let timer = null; let qrKey = '';
     async function openQr() {
-      qrVisible.value = true; qrMsg.value = '等待扫码';
+      qrRefreshing.value = true;
+      if (qrVisible.value) { stopPoll(); qrMsg.value = '正在刷新...'; }
       try {
         const d = await api('/login/qrcode');
         qrKey = d.qrcode_key;
+        qrStatus.value = 'waiting'; qrMsg.value = '等待扫码';
+        qrVisible.value = true;
         nextTick(() => {
           const el = document.getElementById('qrcode');
           el.innerHTML = '';
           new QRCode(el, { text: d.url, width: 220, height: 220 });
         });
         startPoll();
-      } catch (e) { qrMsg.value = e.message; }
+      } catch (e) {
+        qrStatus.value = 'error'; qrMsg.value = '生成二维码失败：' + e.message;
+      } finally { qrRefreshing.value = false; }
     }
     function startPoll() {
       stopPoll();
@@ -1279,8 +1299,16 @@ const Settings = {
         try {
           const r = await api(`/login/poll?qrcode_key=${qrKey}`);
           qrMsg.value = r.message || '...';
-          if (r.status === 'ok') { stopPoll(); qrVisible.value = false; ElementPlus.ElMessage.success('登录成功'); emit('refresh'); }
-          else if (r.status === 'expired') { stopPoll(); ElementPlus.ElMessage.warning('二维码已失效'); }
+          if (r.status === 'ok') {
+            qrStatus.value = 'ok'; stopPoll();
+            ElementPlus.ElMessage.success('登录成功'); qrVisible.value = false; emit('refresh');
+          } else if (r.status === 'scanned') {
+            qrStatus.value = 'scanned';
+          } else if (r.status === 'expired') {
+            qrStatus.value = 'expired'; stopPoll(); qrMsg.value = '二维码已失效，点下方「刷新二维码」重新生成';
+          } else {
+            qrStatus.value = 'waiting';
+          }
         } catch (e) { /* 网络抖动忽略 */ }
       }, 2000);
     }
@@ -1394,7 +1422,7 @@ const Settings = {
       try { account.value = await api('/account'); } catch (e) {}
     }
     onMounted(() => { loadConfig().catch(() => {}); loadAccount(); });
-    return { qrVisible, qrMsg, syncing, smtp, testing, llm, dl, hwLoading, hwModel, account,
+    return { qrVisible, qrMsg, qrDotColor, syncing, smtp, testing, llm, dl, hwLoading, hwModel, account,
              modelList, modelLoading, installing, ollamaOk, installState, ollamaInstalling,
              fmt, openQr, stopPoll, sync, saveSmtp, testEmail, saveLlm, saveDownloadDir,
              recommendLocal, recommendModels, installModel, installOllama };
