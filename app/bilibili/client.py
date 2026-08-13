@@ -1,9 +1,19 @@
 """B 站 API 客户端：统一封装请求、Cookie、登录态检测。"""
 from __future__ import annotations
 
+import json
+import time
+
 import httpx
 
 BASE_URL = "https://api.bilibili.com"
+
+_RETRIES = 3  # 单次请求重试次数（网络抖动/限流/风控）
+_RETRIABLE_HTTP = (429, 500, 502, 503, 504)  # 限流与服务器错误
+
+
+def _backoff(attempt: int) -> None:
+    time.sleep(0.8 + attempt * 1.5)
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -33,15 +43,33 @@ class BiliClient:
             self.session.cookies.update(cookies)
 
     def get_json(self, path: str, params: dict | None = None) -> dict:
-        resp = self.session.get(path, params=params)
-        resp.raise_for_status()
-        data = resp.json()
-        if data.get("code") not in (0, None):
-            raise BiliError(
-                f"{path} 返回错误: code={data.get('code')} {data.get('message', '')}",
-                code=data.get("code"),
-            )
-        return data
+        last: Exception | None = None
+        for attempt in range(_RETRIES):
+            try:
+                resp = self.session.get(path, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("code") not in (0, None):
+                    raise BiliError(
+                        f"{path} 返回错误: code={data.get('code')} {data.get('message', '')}",
+                        code=data.get("code"),
+                    )
+                return data
+            except httpx.HTTPStatusError as e:
+                last = e
+                if e.response.status_code not in _RETRIABLE_HTTP:
+                    raise  # 4xx 等其他错误不重试
+            except (httpx.TransportError, httpx.TimeoutException) as e:
+                last = e  # 网络抖动，重试
+            except (json.JSONDecodeError, ValueError) as e:
+                last = e  # 反爬 HTML 页 / 空响应，重试
+            except BiliError as e:
+                if e.code != -412:
+                    raise  # 只有风控(-412)才重试，其余（如 -404 失效）立即抛
+                last = e
+            if attempt < _RETRIES - 1:
+                _backoff(attempt)
+        raise last  # type: ignore[misc]
 
     def is_logged_in(self) -> bool:
         data = self.get_json("/x/web-interface/nav")
@@ -58,15 +86,33 @@ class BiliClient:
         jct = self.session.cookies.get("bili_jct")
         if jct and "csrf" not in data:
             data["csrf"] = jct
-        resp = self.session.post(path, data=data)
-        resp.raise_for_status()
-        body = resp.json()
-        if body.get("code") not in (0, None):
-            raise BiliError(
-                f"{path} 返回错误: code={body.get('code')} {body.get('message', '')}",
-                code=body.get("code"),
-            )
-        return body
+        last: Exception | None = None
+        for attempt in range(_RETRIES):
+            try:
+                resp = self.session.post(path, data=data)
+                resp.raise_for_status()
+                body = resp.json()
+                if body.get("code") not in (0, None):
+                    raise BiliError(
+                        f"{path} 返回错误: code={body.get('code')} {body.get('message', '')}",
+                        code=body.get("code"),
+                    )
+                return body
+            except httpx.HTTPStatusError as e:
+                last = e
+                if e.response.status_code not in _RETRIABLE_HTTP:
+                    raise
+            except (httpx.TransportError, httpx.TimeoutException) as e:
+                last = e
+            except (json.JSONDecodeError, ValueError) as e:
+                last = e
+            except BiliError as e:
+                if e.code != -412:
+                    raise
+                last = e
+            if attempt < _RETRIES - 1:
+                _backoff(attempt)
+        raise last  # type: ignore[misc]
 
     def close(self) -> None:
         self.session.close()

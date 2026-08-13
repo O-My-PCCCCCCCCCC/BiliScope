@@ -232,27 +232,41 @@ def run_full_sync(client: BiliClient | None = None) -> dict:
     client = client or BiliClient(cookies=cookies)
     conn = get_conn()
     init_db(conn)
+    errors: list[str] = []
+
+    def _guard(label: str, fn) -> int:
+        """单个数据源同步；失败记录错误不中断整体。"""
+        try:
+            return fn()
+        except Exception as e:
+            errors.append(f"{label}同步失败：{e}")
+            return 0
+
     try:
         nav = client.get_json("/x/web-interface/nav")
         uid = nav.get("data", {}).get("mid", 0)
-        n_hist = sync_history(conn, client)
-        n_fav = sync_favorites(conn, client, uid) if uid else 0
-        n_fol = sync_followings(conn, client, uid) if uid else 0
-        n_desc = sync_descriptions(conn, client, limit=200)  # 补拉简介（内容分析用）
-        n_col = sync_collections(conn, client, uid) if uid else 0
-        n_cf = sync_collected_folders(conn, client, uid) if uid else 0
-        n_dyn = sync_dynamics(conn, client, uid) if uid else 0
-        account = sync_account(conn, client, uid) if uid else {}
+        n_hist = _guard("历史", lambda: sync_history(conn, client))
+        n_fav = _guard("收藏", lambda: sync_favorites(conn, client, uid)) if uid else 0
+        n_fol = _guard("关注", lambda: sync_followings(conn, client, uid)) if uid else 0
+        n_desc = _guard("简介", lambda: sync_descriptions(conn, client, limit=200))
+        n_col = _guard("合集", lambda: sync_collections(conn, client, uid)) if uid else 0
+        n_cf = _guard("收藏夹", lambda: sync_collected_folders(conn, client, uid)) if uid else 0
+        n_dyn = _guard("动态", lambda: sync_dynamics(conn, client, uid)) if uid else 0
+        account = _guard("账号", lambda: sync_account(conn, client, uid)) if uid else {}
+        account = account or {}
         if uid:
             cfg = load_config()
             cfg["uid"] = uid
             save_config(cfg)
         conn.commit()
-        return {"history": n_hist, "favorites": n_fav, "followings": n_fol,
-                "descriptions": n_desc,
-                "collections": n_col, "collected_folders": n_cf,
-                "dynamics": n_dyn,
-                "coins": account.get("coins", 0), "coin_log": account.get("coin_log", 0)}
+        result = {"history": n_hist, "favorites": n_fav, "followings": n_fol,
+                  "descriptions": n_desc,
+                  "collections": n_col, "collected_folders": n_cf,
+                  "dynamics": n_dyn,
+                  "coins": account.get("coins", 0), "coin_log": account.get("coin_log", 0)}
+        if errors:
+            result["errors"] = errors
+        return result
     finally:
         conn.close()
         if own and client is not None:

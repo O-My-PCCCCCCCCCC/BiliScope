@@ -1359,7 +1359,12 @@ const Settings = {
       syncing.value = true;
       try {
         const r = await api('/sync', { method: 'POST' });
-        ElementPlus.ElMessage.success(`同步完成：历史+${r.history} 收藏+${r.favorites} 关注+${r.followings}`);
+        const syncMsg = `同步完成：历史+${r.history} 收藏+${r.favorites} 关注+${r.followings}`;
+        if (r.errors && r.errors.length) {
+          ElementPlus.ElMessage.warning(syncMsg + '，部分失败：\n' + r.errors.join('\n'));
+        } else {
+          ElementPlus.ElMessage.success(syncMsg);
+        }
         emit('refresh');
       } catch (e) { ElementPlus.ElMessage.error(e.message); }
       finally { syncing.value = false; }
