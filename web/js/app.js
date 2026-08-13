@@ -448,10 +448,14 @@ const Analysis = {
       <el-col :span="8"><el-card><div class="card-num">{{ favGrowthLast }}</div><div class="card-label">本月新增收藏</div></el-card></el-col>
     </el-row>
 
-    <el-row :gutter="12" style="margin-bottom:16px">
-      <el-col :span="12"><el-card><div data-monthly class="chart"></div></el-card></el-col>
-      <el-col :span="12"><el-card><div data-favgrowth class="chart"></div></el-card></el-col>
-    </el-row>
+    <el-card style="margin-bottom:16px">
+      <template #header>📈 趋势</template>
+      <el-row :gutter="12">
+        <el-col :span="8"><div data-monthly class="chart"></div></el-col>
+        <el-col :span="8"><div data-favgrowth class="chart"></div></el-col>
+        <el-col :span="8"><div data-topup class="chart"></div></el-col>
+      </el-row>
+    </el-card>
 
     <el-card style="margin-bottom:16px">
       <template #header>⏱️ 时间花在哪</template>
@@ -482,66 +486,63 @@ const Analysis = {
       <div v-if="night.night_ratio !== undefined" style="margin-top:8px;color:#888;font-size:13px">
         🦉 深夜(0-6)占比 <b style="color:#fb7299">{{ night.night_ratio }}%</b>（{{ night.night_level }}）· 工作日占比 {{ night.weekday_ratio }}%
       </div>
-    </el-card>
-
-    <el-card style="margin-bottom:16px">
-      <template #header>📁 收藏行为</template>
-      <div v-if="graveyard.total" style="color:#e6a23c;font-size:14px;margin-bottom:8px">
-        吃灰率 <b style="color:#fb7299">{{ graveyard.pct }}%</b>（{{ graveyard.graveyard }}/{{ graveyard.total }} 个收藏从没看过，建议清理）
-      </div>
-      <el-table :data="graveyardItems" size="small" max-height="320" style="width:100%">
-        <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip/>
-        <el-table-column prop="up_name" label="UP主" width="120" show-overflow-tooltip/>
-        <el-table-column prop="tname" label="分区" width="90"/>
-      </el-table>
-      <div v-if="!graveyardItems.length" class="empty-tip">没有吃灰收藏 🎉</div>
-    </el-card>
-
-    <el-card style="margin-bottom:16px">
-      <template #header>🔁 重复观看 · 沉迷视频 TOP</template>
-      <el-table :data="repeat" size="small" max-height="300" style="width:100%">
-        <el-table-column prop="title" label="标题" min-width="240" show-overflow-tooltip/>
-        <el-table-column prop="up_name" label="UP主" width="120"/>
-        <el-table-column label="看了几遍" width="90"><template #default="s">{{ s.row.views }} 遍</template></el-table-column>
-        <el-table-column label="累计时长" width="110"><template #default="s">{{ (s.row.total_sec / 3600).toFixed(1) }} 小时</template></el-table-column>
-      </el-table>
-      <div v-if="!repeat.length" class="empty-tip">没有重复观看的视频</div>
-    </el-card>
-
-    <el-card style="margin-bottom:16px">
-      <template #header>📅 活跃周期（近 90 天）</template>
-      <div v-if="streak.active_days" style="color:#999;font-size:13px;margin-bottom:8px">
-        最长连续观看 <b style="color:#fb7299">{{ streak.longest_streak }} 天</b> · 活跃 {{ streak.active_days }} 天
-      </div>
-      <div data-calendar class="chart" style="height:150px"></div>
+      <el-row :gutter="12" style="margin-top:8px">
+        <el-col :span="8"><div data-completion class="chart"></div></el-col>
+        <el-col :span="8"><div data-popularity class="chart"></div></el-col>
+        <el-col :span="8"><div data-weekend class="chart"></div></el-col>
+      </el-row>
     </el-card>
 
     <el-row :gutter="12" style="margin-bottom:16px">
-      <el-col :span="12"><el-card><div data-topup class="chart"></div></el-card></el-col>
       <el-col :span="12"><el-card>
-        <template #header>
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <span>UP主粉丝数（快照）</span>
-            <el-button size="small" type="primary" @click="collectFollowers" :loading="followerLoading">采集快照</el-button>
-          </div>
-        </template>
-        <el-table :data="upFollowers" size="small" max-height="240" style="width:100%">
-          <el-table-column prop="uname" label="UP主" show-overflow-tooltip/>
-          <el-table-column label="粉丝数" width="100">
-            <template #default="s">{{ fmtNum(s.row.points[s.row.points.length - 1]?.follower) }}</template>
-          </el-table-column>
-          <el-table-column label="快照" width="70">
-            <template #default="s">{{ s.row.points.length }} 次</template>
-          </el-table-column>
+        <template #header>📁 收藏行为（吃灰率 {{ graveyard.pct }}%）</template>
+        <div v-if="graveyard.total" style="color:#e6a23c;font-size:13px;margin-bottom:8px">
+          {{ graveyard.graveyard }}/{{ graveyard.total }} 个收藏从没看过
+        </div>
+        <el-table :data="graveyardItems" size="small" max-height="300" style="width:100%">
+          <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip/>
+          <el-table-column prop="up_name" label="UP主" width="100" show-overflow-tooltip/>
         </el-table>
+        <div v-if="!graveyardItems.length" class="empty-tip">没有吃灰收藏 🎉</div>
+      </el-card></el-col>
+      <el-col :span="12"><el-card>
+        <template #header>🔁 重复观看 TOP</template>
+        <el-table :data="repeat" size="small" max-height="300" style="width:100%">
+          <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip/>
+          <el-table-column label="看了几遍" width="80"><template #default="s">{{ s.row.views }} 遍</template></el-table-column>
+          <el-table-column label="累计" width="90"><template #default="s">{{ (s.row.total_sec / 3600).toFixed(1) }}h</template></el-table-column>
+        </el-table>
+        <div v-if="!repeat.length" class="empty-tip">没有重复观看的视频</div>
       </el-card></el-col>
     </el-row>
 
-    <el-row :gutter="12" style="margin-bottom:16px">
-      <el-col :span="8"><el-card><div data-completion class="chart"></div></el-card></el-col>
-      <el-col :span="8"><el-card><div data-popularity class="chart"></div></el-card></el-col>
-      <el-col :span="8"><el-card><div data-weekend class="chart"></div></el-card></el-col>
-    </el-row>
+    <el-card style="margin-bottom:16px">
+      <template #header>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span>👤 UP主与活跃</span>
+          <el-button size="small" type="primary" @click="collectFollowers" :loading="followerLoading">采集粉丝快照</el-button>
+        </div>
+      </template>
+      <el-row :gutter="12">
+        <el-col :span="10">
+          <div v-if="streak.active_days" style="color:#999;font-size:13px;margin-bottom:8px">
+            📅 最长连续观看 <b style="color:#fb7299">{{ streak.longest_streak }} 天</b> · 活跃 {{ streak.active_days }} 天
+          </div>
+          <div data-calendar class="chart" style="height:180px"></div>
+        </el-col>
+        <el-col :span="14">
+          <el-table :data="upFollowers" size="small" max-height="240" style="width:100%">
+            <el-table-column prop="uname" label="UP主" show-overflow-tooltip/>
+            <el-table-column label="粉丝数" width="100">
+              <template #default="s">{{ fmtNum(s.row.points[s.row.points.length - 1]?.follower) }}</template>
+            </el-table-column>
+            <el-table-column label="快照" width="70">
+              <template #default="s">{{ s.row.points.length }} 次</template>
+            </el-table-column>
+          </el-table>
+        </el-col>
+      </el-row>
+    </el-card>
 
     <el-card>
       <template #header>分析管理</template>
@@ -666,9 +667,11 @@ const Analysis = {
       }
       const cal = streak.value.calendar || [];
       if (cal.length) {
+        const end = cal[cal.length - 1].day;
+        const start = new Date(new Date(end).getTime() - 89 * 86400000).toISOString().slice(0, 10);
         mk('[data-calendar]', {
           tooltip: {},
-          calendar: { range: 90, cellSize: ['auto', 14], left: 30, right: 20, top: 10 },
+          calendar: { range: [start, end], cellSize: ['auto', 14], left: 30, right: 20, top: 10 },
           visualMap: { min: 0, max: 5, inRange: { color: ['#2a2a2a', '#fb7299'] },
                        orient: 'horizontal', left: 'center', bottom: 0, text: ['多', '少'] },
           series: [{ type: 'heatmap', coordinateSystem: 'calendar', data: cal.map(x => [x.day, x.n]) }],
