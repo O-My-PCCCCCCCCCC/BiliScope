@@ -4,6 +4,7 @@ body { background: #141414; color: #e5e5e5; font-family: 'Microsoft YaHei', sans
 .layout { height: 100%; }
 .aside { background: #1e1e1e; border-right: 1px solid #333; position: relative; display: flex; flex-direction: column; }
 .logo { color: #fb7299; font-size: 22px; font-weight: 700; padding: 20px 16px; }
+.logo-ver { color: #666; font-size: 12px; font-weight: 400; margin-left: 8px; }
 .menu { border-right: none; background: transparent; }
 .sync-status { position: absolute; bottom: 20px; left: 16px; }
 .account-card { margin-top: auto; margin-left: 10px; margin-right: 10px; margin-bottom: 12px; background: #242424; border-radius: 8px; padding: 8px 10px; display: flex; gap: 8px; align-items: center; }

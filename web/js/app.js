@@ -1549,7 +1549,7 @@ const App = {
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
-        <div class="logo">BiliScope</div>
+        <div class="logo">BiliScope<span class="logo-ver">v1.1</span></div>
         <div class="search-box">
           <el-input v-model="searchQ" placeholder="搜索视频 / UP主" clearable @keyup.enter="doSearch">
             <template #prefix><el-icon><Search/></el-icon></template>

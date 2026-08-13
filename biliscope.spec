@@ -25,4 +25,5 @@ a = Analysis(['run.py'], pathex=[], binaries=[], datas=datas,
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, a.binaries, a.datas, [],
           name='BiliScope', debug=False, bootloader_ignore_signals=False,
-          strip=False, upx=True, console=True)
+          strip=False, upx=True, console=True,
+          version='version_info.py')
