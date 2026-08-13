@@ -129,3 +129,21 @@ def _run(urls: list[str], fmt: str) -> None:
         _download_status.update({"state": "done", "progress": 100, "message": "全部下载完成"})
     except Exception as e:
         _download_status.update({"state": "error", "message": str(e)})
+
+
+def clear_downloads() -> dict:
+    """删除下载目录里已下载的文件。下载进行中则拒绝。"""
+    if _thread and _thread.is_alive():
+        return {"error": "下载进行中，请稍后再清空"}
+    d = out_dir()
+    if not d.exists():
+        return {"deleted": 0}
+    n = 0
+    for p in d.iterdir():
+        if p.is_file() and p.suffix in (".mp4", ".mp3", ".m4a", ".webm"):
+            try:
+                p.unlink()
+                n += 1
+            except Exception:
+                continue
+    return {"deleted": n}

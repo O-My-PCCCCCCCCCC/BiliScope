@@ -242,41 +242,59 @@ const Downloads = {
       <div v-else-if="status.state === 'done'"><el-tag type="success">全部下载完成</el-tag></div>
       <div v-else-if="status.state === 'error'"><el-tag type="danger">下载失败：{{ status.message }}</el-tag></div>
       <div v-else style="color:#999">暂无任务。可以到 AI 助手让它批量下载，或点下方手动下载</div>
-      <div style="margin-top:10px">
-        <el-input v-model="manualUrl" placeholder="粘贴一个 B 站视频链接" style="width:360px"/>
-        <el-button type="primary" @click="manual('mp4')">下载视频</el-button>
-        <el-button @click="manual('audio')">下载音频</el-button>
+      <div style="margin-top:10px;display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">
+        <el-input v-model="manualUrls" type="textarea" :rows="3" placeholder="粘贴 B 站视频链接或 BV 号，每行一个（支持批量）&#10;例：&#10;https://www.bilibili.com/video/BV1ZagB6cEM6&#10;BV1xxxxxxxxxx" style="width:480px"/>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <el-button type="primary" @click="manual('mp4')">下载视频</el-button>
+          <el-button @click="manual('audio')">下载音频</el-button>
+        </div>
       </div>
     </el-card>
     <el-card>
-      <template #header>已下载文件（{{ files.length }}）</template>
+      <template #header>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span>已下载文件（{{ files.length }}）</span>
+          <el-button v-if="files.length" size="small" type="danger" plain @click="clearDownloads">清空下载</el-button>
+        </div>
+      </template>
       <el-table :data="files" style="width:100%">
-        <el-table-column prop="name" label="文件名" min-width="300"/>
+        <el-table-column prop="name" label="文件名" min-width="300" show-overflow-tooltip/>
       </el-table>
     </el-card>
   `,
   setup() {
     const status = ref({ state: 'idle', tasks: [], current: '', progress: 0, message: '' });
-    const files = ref([]); const manualUrl = ref('');
+    const files = ref([]); const manualUrls = ref('');
     let timer = null;
     async function load() {
       status.value = await api('/downloads/status').catch(() => status.value);
       files.value = (await api('/downloads/list').catch(() => [])).map(name => ({ name }));
     }
     async function manual(fmt) {
-      const url = manualUrl.value.trim();
-      if (!url) { ElementPlus.ElMessage.warning('请先粘贴链接'); return; }
-      manualUrl.value = '';
+      const urls = manualUrls.value.split('\n').map(s => s.trim()).filter(Boolean);
+      if (!urls.length) { ElementPlus.ElMessage.warning('请先粘贴至少一个链接'); return; }
+      manualUrls.value = '';
       try {
         await api('/downloads/run', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ urls: [url], fmt }) });
-        ElementPlus.ElMessage.success('已开始下载');
+          body: JSON.stringify({ urls, fmt }) });
+        ElementPlus.ElMessage.success(`已开始下载 ${urls.length} 个`);
+        load();
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+    }
+    async function clearDownloads() {
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          '将删除下载目录里的所有文件（不可恢复）。确定清空？', '清空下载', { type: 'warning' });
+      } catch (e) { return; }
+      try {
+        const r = await api('/downloads/clear', { method: 'POST' });
+        ElementPlus.ElMessage.success(`已清空 ${r.deleted} 个文件`);
         load();
       } catch (e) { ElementPlus.ElMessage.error(e.message); }
     }
     onMounted(() => { load(); timer = setInterval(load, 2000); });
     onBeforeUnmount(() => { if (timer) clearInterval(timer); });
-    return { status, files, manualUrl, manual };
+    return { status, files, manualUrls, manual, clearDownloads };
   },
 };
 

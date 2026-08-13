@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app import config, database
-from app.downloader import _run, download_status, out_dir
+from app.downloader import _run, clear_downloads, download_status, out_dir, start_download
 
 
 def test_out_dir_default(tmp_path):
@@ -99,3 +99,38 @@ def test_normalize_urls():
     assert normalize_urls(["BV1ZagB6cEM6"]) == ["https://www.bilibili.com/video/BV1ZagB6cEM6"]
     assert normalize_urls(["https://www.bilibili.com/video/BV1xx"]) == ["https://www.bilibili.com/video/BV1xx"]
     assert normalize_urls(["", "  "]) == []
+
+
+def test_clear_downloads(tmp_path):
+    from app import config
+    config.set_config_path(tmp_path / "config.json")
+    config.save_config({**config.load_config(), "download_dir": str(tmp_path / "dl")})
+    d = out_dir()
+    (d / "a.mp3").write_text("x")
+    (d / "b.mp4").write_text("x")
+    (d / "c.txt").write_text("x")  # 非下载文件不清
+    assert clear_downloads() == {"deleted": 2}
+    assert not (d / "a.mp3").exists()
+    assert (d / "c.txt").exists()
+
+
+def test_start_download_batch(tmp_path, monkeypatch):
+    from app import config
+    config.set_config_path(tmp_path / "config.json")
+    called = {}
+    monkeypatch.setattr("app.downloader._thread", type("T", (), {"is_alive": lambda self: False})())
+    monkeypatch.setattr("app.downloader.out_dir", lambda: tmp_path)
+    monkeypatch.setattr("app.downloader._run", lambda urls, fmt: called.update(urls=urls, fmt=fmt))
+
+    class FakeThread:
+        def __init__(self, target, args=(), **kw):
+            self.target = target; self.args = args
+        def start(self):
+            self.target(*self.args)
+    monkeypatch.setattr("app.downloader.threading", type("Th", (), {"Thread": FakeThread})())
+
+    r = start_download(["BV1ZagB6cEM6", "https://www.bilibili.com/video/BV2aaaaaaaa"], "audio")
+    assert r["ok"] is True
+    assert called["urls"] == ["https://www.bilibili.com/video/BV1ZagB6cEM6",
+                              "https://www.bilibili.com/video/BV2aaaaaaaa"]
+    assert called["fmt"] == "audio"

@@ -798,6 +798,15 @@ def downloads_list() -> list:
     return list_downloads()
 
 
+@router.post("/downloads/clear")
+def downloads_clear() -> dict:
+    from app.downloader import clear_downloads
+    result = clear_downloads()
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
 @router.get("/collections")
 def collections() -> list:
     conn = get_conn()
