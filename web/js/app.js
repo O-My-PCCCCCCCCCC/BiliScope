@@ -300,23 +300,44 @@ const Downloads = {
 
 const Chat = {
   template: `
-    <h2>AI 助手</h2>
-    <div class="chat-box" ref="chatBox">
-      <div v-for="(m, i) in display" :key="i" class="chat-msg" :class="m.role">
-        <div class="chat-avatar" v-if="m.role === 'assistant'">🤖</div>
-        <div class="chat-bubble" v-if="m.role === 'user'">{{ m.text }}</div>
-        <div class="chat-bubble md" v-else-if="m.role === 'assistant'" v-html="m.html"></div>
-        <div class="chat-bubble tool" v-else-if="m.role === 'tool'">{{ m.text }}</div>
+    <div class="ds-chat">
+      <div class="ds-messages" ref="chatBox">
+        <div v-for="(m, i) in display" :key="i" class="ds-msg" :class="m.role">
+          <div class="ds-row">
+            <div class="ds-avatar" v-if="m.role === 'assistant'">🤖</div>
+            <div class="ds-bubble" :class="{ md: m.role === 'assistant' || m.role === 'tool' }">
+              <template v-if="m.role === 'user'"><span>{{ m.text }}</span></template>
+              <template v-else-if="m.role === 'assistant'">
+                <div v-html="m.html"></div>
+                <div class="ds-toolbar">
+                  <button class="ds-copy" @click="copyText(m.text)">复制</button>
+                </div>
+              </template>
+              <template v-else-if="m.role === 'tool'"><div class="ds-tool">{{ m.text }}</div></template>
+            </div>
+          </div>
+        </div>
+        <div v-if="thinking" class="ds-msg assistant">
+          <div class="ds-row">
+            <div class="ds-avatar">🤖</div>
+            <div class="ds-bubble thinking">正在思考<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
+          </div>
+        </div>
       </div>
-      <div v-if="thinking" class="chat-msg assistant">
-        <div class="chat-avatar">🤖</div>
-        <div class="chat-bubble thinking">正在思考<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
+      <div class="ds-input-area">
+        <div class="ds-input-wrap">
+          <el-input v-model="input" type="textarea" :rows="1" autosize resize="none"
+                    placeholder="给 BiliScope 发消息，Enter 发送，Shift+Enter 换行"
+                    @keydown.enter.exact.prevent="send"/>
+          <button class="ds-send" @click="send" :disabled="loading || !input.trim()">
+            <el-icon><Promotion/></el-icon>
+          </button>
+        </div>
+        <div class="ds-input-foot">
+          <span style="color:#666;font-size:12px">{{ display.length }} 条消息</span>
+          <button class="ds-reset" @click="reset">清空对话</button>
+        </div>
       </div>
-    </div>
-    <div class="chat-input">
-      <el-input v-model="input" placeholder="例如：把音乐收藏夹里的视频整理到新文件夹" @keyup.enter="send"/>
-      <el-button type="primary" @click="send" :loading="loading">发送</el-button>
-      <el-button @click="reset">清空</el-button>
     </div>
   `,
   setup() {
@@ -337,7 +358,7 @@ const Chat = {
       const out = [];
       for (const m of messages.value) {
         if (m.role === 'user') out.push({ role: 'user', text: m.content });
-        else if (m.role === 'assistant' && m.content) out.push({ role: 'assistant', html: renderMd(m.content) });
+        else if (m.role === 'assistant' && m.content) out.push({ role: 'assistant', text: m.content, html: renderMd(m.content) });
         else if (m.role === 'assistant' && m.tool_calls) {
           out.push({ role: 'tool', text: '🔧 调用：' + m.tool_calls.map(t => t.function.name).join('、') });
         } else if (m.role === 'tool') {
@@ -347,16 +368,19 @@ const Chat = {
         }
       }
       display.value = out;
-      nextTick(() => {
-        const box = document.querySelector('.chat-box');
-        if (box) box.scrollTop = box.scrollHeight;
-      });
+      scrollToBottom();
     }
     function scrollToBottom() {
       nextTick(() => {
-        const box = document.querySelector('.chat-box');
+        const box = document.querySelector('.ds-messages');
         if (box) box.scrollTop = box.scrollHeight;
       });
+    }
+    function copyText(text) {
+      try {
+        if (navigator.clipboard) navigator.clipboard.writeText(text || '');
+      } catch (e) {}
+      ElementPlus.ElMessage.success('已复制');
     }
     async function send() {
       const text = input.value.trim();
@@ -372,7 +396,7 @@ const Chat = {
         await loadHistory();
       } catch (e) {
         ElementPlus.ElMessage.error(e.message);
-        display.value.push({ role: 'assistant', html: renderMd('⚠️ ' + e.message) });
+        display.value.push({ role: 'assistant', text: '⚠️ ' + e.message, html: renderMd('⚠️ ' + e.message) });
       } finally {
         loading.value = false;
         thinking.value = false;
@@ -384,7 +408,7 @@ const Chat = {
       messages.value = []; display.value = [];
     }
     onMounted(() => loadHistory().catch(() => {}));
-    return { messages, display, input, loading, thinking, send, reset };
+    return { messages, display, input, loading, thinking, send, reset, copyText };
   },
 };
 
