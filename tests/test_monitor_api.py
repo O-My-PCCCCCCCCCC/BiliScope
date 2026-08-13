@@ -20,15 +20,15 @@ def test_run_requires_login():
     assert client.post("/api/monitor/run").status_code == 401
 
 
-def test_run_and_lists(monkeypatch):
+def test_run_starts_background(monkeypatch):
     import app.api as api_mod
     config.save_cookies({"SESSDATA": "abc"})
-    monkeypatch.setattr(api_mod, "check_invalid", lambda conn, client, **kw: 2)
-    monkeypatch.setattr(api_mod, "check_updates", lambda conn, client, **kw: 1)
+    monkeypatch.setattr(api_mod, "start_monitor", lambda scope="all": {"ok": True})
 
     r = client.post("/api/monitor/run")
     assert r.status_code == 200
-    assert r.json() == {"invalid": 2, "updates": 1}
+    assert r.json() == {"ok": True}
+    assert "state" in client.get("/api/monitor/status").json()
 
 
 def test_invalid_and_updates_lists():

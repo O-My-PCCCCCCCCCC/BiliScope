@@ -21,7 +21,8 @@ from app.insights.cross_time import time_content_cross
 from app.insights.interest import interest_drift
 from app.insights.persona import generate_persona
 from app.insights.time_invest import time_invest
-from app.monitor import check_invalid, check_updates
+from app.monitor import monitor_status as monitor_status_fn
+from app.monitor import start_monitor
 from app.report import generate_report
 from app.sync import run_full_sync
 
@@ -138,19 +139,12 @@ def alert_read(alert_id: int) -> dict:
 def monitor_run(scope: str = "all") -> dict:
     if not get_cookies():
         raise HTTPException(status_code=401, detail="未登录，请先扫码登录")
-    conn = get_conn()
-    init_db(conn)
-    try:
-        from app.bilibili.client import BiliClient
-        with BiliClient(cookies=get_cookies()) as client:
-            history_only = scope == "history"
-            media_id = int(scope) if scope.isdigit() else None
-            n_invalid = check_invalid(conn, client, limit=100,
-                                      media_id=media_id, history_only=history_only)
-            n_updates = check_updates(conn, client, limit=20)
-    finally:
-        conn.close()
-    return {"invalid": n_invalid, "updates": n_updates}
+    return start_monitor(scope)
+
+
+@router.get("/monitor/status")
+def monitor_status() -> dict:
+    return monitor_status_fn()
 
 
 @router.get("/monitor/invalid")

@@ -72,3 +72,52 @@ def test_check_updates_detects_new(tmp_path):
     assert conn.execute("SELECT last_bvid FROM updates WHERE mid=1").fetchone()[0] == "BV_NEW"
     assert conn.execute("SELECT COUNT(*) FROM alerts WHERE type='update'").fetchone()[0] == 1
     conn.close()
+
+
+def test_start_monitor_background_flow(monkeypatch):
+    """后台监测流：start_monitor → 状态 done + result。"""
+    import time
+    import app.monitor as monitor_mod
+    monkeypatch.setattr(monitor_mod, "check_invalid", lambda *a, **k: 2)
+    monkeypatch.setattr(monitor_mod, "check_updates", lambda *a, **k: 1)
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+    monkeypatch.setattr(monitor_mod, "BiliClient", lambda cookies: FakeClient())
+    monkeypatch.setattr(monitor_mod, "get_cookies", lambda: {"SESSDATA": "x"})
+
+    assert monitor_mod.start_monitor("all") == {"ok": True}
+    st = {}
+    for _ in range(100):
+        st = monitor_mod.monitor_status()
+        if st["state"] in ("done", "error"):
+            break
+        time.sleep(0.05)
+    assert st["state"] == "done"
+    assert st["result"] == {"invalid": 2, "updates": 1}
+
+
+def test_check_invalid_favorites_only(tmp_path, monkeypatch):
+    """favorites_only 只查收藏不查历史。"""
+    from app import database
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    conn.execute("INSERT INTO history (bvid, view_at) VALUES ('BV-H', 1)")
+    conn.execute("INSERT INTO fav_items (media_id, bvid) VALUES (101, 'BV-F')")
+    conn.commit()
+
+    called = []
+    class FakeClient:
+        def get_json(self, path, params=None):
+            called.append(params["bvid"])
+            raise __import__("app.bilibili.client", fromlist=["BiliError"]).BiliError("not found", -404)
+
+    from app.monitor import check_invalid
+    n = check_invalid(conn, FakeClient(), limit=100, favorites_only=True)
+    assert n == 1
+    assert called == ["BV-F"]  # 只查了收藏，没查历史 BV-H
+    conn.close()

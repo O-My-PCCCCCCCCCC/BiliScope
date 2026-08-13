@@ -77,12 +77,15 @@ def test_database_seeded_from_client():
 def test_monitor_chain(tmp_path, monkeypatch):
     import app.api as api_mod
     config.save_cookies({"SESSDATA": "abc"})
-    monkeypatch.setattr(api_mod, "check_invalid", lambda conn, client, **kw: 1)
-    monkeypatch.setattr(api_mod, "check_updates", lambda conn, client, **kw: 0)
+    monkeypatch.setattr(api_mod, "start_monitor", lambda scope="all": {"ok": True})
+    monkeypatch.setattr(api_mod, "monitor_status_fn",
+                        lambda: {"state": "done", "result": {"invalid": 1, "updates": 0},
+                                 "message": "done", "progress": 100, "total": 0, "current": "", "scope": "all"})
 
     r = client.post("/api/monitor/run")
     assert r.status_code == 200
-    assert r.json() == {"invalid": 1, "updates": 0}
+    assert r.json() == {"ok": True}
+    assert client.get("/api/monitor/status").json()["state"] == "done"
 
     # 写入一条提醒并确认未读数暴露到 status
     from app.notify import add_alert

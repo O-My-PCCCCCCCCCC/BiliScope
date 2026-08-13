@@ -782,15 +782,22 @@ const Monitor = {
     <h2>监测中心</h2>
     <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <el-select v-model="selScope" style="width:240px" placeholder="选择检测范围">
-        <el-option label="全部（历史+收藏）" value="all"/>
+        <el-option label="全部收藏（推荐）" value="all"/>
         <el-option label="观看历史" value="history"/>
         <el-option v-for="f in folders" :key="f.media_id" :label="f.name + '（' + f.count + '）'" :value="String(f.media_id)"/>
       </el-select>
       <el-button type="primary" @click="run" :loading="running">检测失效视频</el-button>
-      <el-tag v-if="result" style="margin-left:8px">失效 {{ result.invalid }} · UP更新 {{ result.updates }}</el-tag>
+      <el-tag v-if="monState.state === 'done' && monState.result" style="margin-left:8px" type="success">
+        失效 {{ monState.result.invalid }} · UP更新 {{ monState.result.updates }}
+      </el-tag>
+      <el-tag v-if="monState.state === 'error'" style="margin-left:8px" type="danger">检测失败</el-tag>
     </div>
-    <div style="color:#999;font-size:12px;margin-bottom:12px">
-      按收藏夹检测更快；全部检测需逐条请求 B 站，可能耗时几分钟，请耐心等待
+    <div v-if="monState.state === 'running'" style="margin-bottom:12px">
+      <el-progress :percentage="monState.progress"/>
+      <div style="color:#999;font-size:12px;margin-top:4px">{{ monState.message }}<span v-if="monState.total">（共 {{ monState.total }} 项）</span></div>
+    </div>
+    <div v-else-if="monState.state === 'idle'" style="color:#999;font-size:12px;margin-bottom:12px">
+      默认只检测收藏夹（失效的可以直接清理）；检测历史请在范围里选「观看历史」。检测需逐条请求 B 站，可能耗时几分钟。
     </div>
     <el-tabs v-model="tab">
       <el-tab-pane label="提醒" name="alerts">
@@ -831,9 +838,11 @@ const Monitor = {
   setup(props, { emit }) {
     const tab = ref('alerts');
     const alerts = ref([]); const invalidList = ref([]); const updates = ref([]);
-    const running = ref(false); const result = ref(null);
+    const running = ref(false);
+    const monState = ref({ state: 'idle', progress: 0, message: '', total: 0, result: null });
     const folders = ref([]); const selScope = ref('all');
     const fmt = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN') : '';
+    let monTimer = null;
     async function loadAll() {
       const d = await api('/alerts');
       alerts.value = d.items;
@@ -843,14 +852,31 @@ const Monitor = {
     async function loadFolders() {
       folders.value = await api('/favorites').catch(() => []);
     }
-    async function run() {
-      running.value = true;
-      try {
-        result.value = await api(`/monitor/run?scope=${selScope.value}`, { method: 'POST' });
+    async function pollMonitor() {
+      try { monState.value = await api('/monitor/status'); } catch (e) {}
+      const s = monState.value.state;
+      if (s === 'done') {
+        if (monTimer) { clearInterval(monTimer); monTimer = null; }
+        running.value = false;
         await loadAll();
         emit('refresh');
-      } catch (e) { ElementPlus.ElMessage.error(e.message); }
-      finally { running.value = false; }
+      } else if (s === 'error') {
+        if (monTimer) { clearInterval(monTimer); monTimer = null; }
+        running.value = false;
+        ElementPlus.ElMessage.error('检测失败：' + (monState.value.message || '未知错误'));
+      }
+    }
+    async function run() {
+      if (running.value) return;
+      running.value = true;
+      monState.value = { state: 'running', progress: 0, message: '启动中...', total: 0, result: null };
+      try {
+        await api(`/monitor/run?scope=${selScope.value}`, { method: 'POST' });
+        monTimer = setInterval(pollMonitor, 1500);
+      } catch (e) {
+        ElementPlus.ElMessage.error(e.message);
+        running.value = false;
+      }
     }
     async function markRead(id) {
       await api(`/alerts/${id}/read`, { method: 'POST' });
@@ -858,7 +884,8 @@ const Monitor = {
       emit('refresh');
     }
     onMounted(() => { loadAll().catch(() => {}); loadFolders(); });
-    return { tab, alerts, invalidList, updates, running, result, folders, selScope,
+    onBeforeUnmount(() => { if (monTimer) clearInterval(monTimer); });
+    return { tab, alerts, invalidList, updates, running, monState, folders, selScope,
              fmt, run, markRead };
   },
 };
