@@ -34,6 +34,7 @@ DEFAULT_CONFIG: dict = {
     "smtp": {"host": "", "port": 465, "user": "", "password": "", "to": ""},
     "llm": {"provider": "ollama", "api_key": "", "base_url": "", "model": ""},
     "task_interval": {"history": "03:00", "invalid": "04:00", "updates": 6},
+    "download_dir": "",
 }
 
 

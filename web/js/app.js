@@ -214,6 +214,13 @@ const Downloads = {
   template: `
     <h2>下载管理</h2>
     <el-card style="margin-bottom:16px">
+      <template #header>保存位置与格式</template>
+      <div>保存到：<code style="color:#7ecbf2;word-break:break-all">{{ status.out_dir || '加载中...' }}</code></div>
+      <div style="color:#999;font-size:12px;margin-top:6px">
+        视频 → MP4（需 ffmpeg 合并）；音频 → MP3 / M4A。可在「设置 → 下载」里改保存目录。
+      </div>
+    </el-card>
+    <el-card style="margin-bottom:16px">
       <template #header>当前任务</template>
       <div v-if="status.state === 'running'">
         <el-progress :percentage="status.progress"/>
@@ -1173,6 +1180,18 @@ const Settings = {
         </div>
       </el-form>
     </el-card>
+    <el-card style="max-width:520px;margin-top:16px">
+      <template #header>下载</template>
+      <el-form :model="dl" label-width="80px" label-position="left">
+        <el-form-item label="保存目录">
+          <el-input v-model="dl.download_dir" placeholder="留空 = 项目 data/downloads"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="saveDownloadDir">保存</el-button>
+          <span style="color:#999;font-size:12px;margin-left:8px">当前：{{ dl.download_dir || '默认 data/downloads' }}</span>
+        </el-form-item>
+      </el-form>
+    </el-card>
     <el-dialog v-model="qrVisible" title="扫码登录 B 站" width="340px" @closed="stopPoll">
       <div id="qrcode" style="display:flex;justify-content:center"></div>
       <p style="text-align:center;margin-top:12px">{{ qrMsg }}</p>
@@ -1222,6 +1241,12 @@ const Settings = {
       const c = await api('/config');
       smtp.value = { ...c.smtp };
       llm.value = { provider: 'ollama', api_key: '', base_url: '', model: '', ...c.llm };
+      dl.value.download_dir = c.download_dir || '';
+    }
+    async function saveDownloadDir() {
+      await api('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ download_dir: dl.value.download_dir }) });
+      ElementPlus.ElMessage.success('下载目录已保存');
     }
     async function saveLlm() {
       await api('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1305,16 +1330,17 @@ const Settings = {
       finally { testing.value = false; }
     }
     const llm = ref({ provider: 'ollama', api_key: '', base_url: '', model: '' });
+    const dl = ref({ download_dir: '' });
     const hwLoading = ref(false); const hwModel = ref('');
     const account = ref({ stats: null, coin_log: [] });
     async function loadAccount() {
       try { account.value = await api('/account'); } catch (e) {}
     }
     onMounted(() => { loadConfig().catch(() => {}); loadAccount(); });
-    return { qrVisible, qrMsg, syncing, smtp, testing, llm, hwLoading, hwModel, account,
+    return { qrVisible, qrMsg, syncing, smtp, testing, llm, dl, hwLoading, hwModel, account,
              modelList, modelLoading, installing, ollamaOk, installState, ollamaInstalling,
-             fmt, openQr, stopPoll, sync, saveSmtp, testEmail, saveLlm, recommendLocal,
-             recommendModels, installModel, installOllama };
+             fmt, openQr, stopPoll, sync, saveSmtp, testEmail, saveLlm, saveDownloadDir,
+             recommendLocal, recommendModels, installModel, installOllama };
   },
 };
 

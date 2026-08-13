@@ -3,25 +3,41 @@ from __future__ import annotations
 
 import shutil
 import threading
+from pathlib import Path
 
-from app.config import DATA_DIR
+from app.config import DATA_DIR, load_config
+from app.ffmpeg_setup import ensure_ffmpeg
 
-OUT_DIR = DATA_DIR / "data" / "downloads"
+try:
+    import yt_dlp
+except Exception:  # 未安装时 _run 会报错，由状态提示
+    yt_dlp = None
 
 _download_status: dict = {"state": "idle", "tasks": [], "current": "",
                           "progress": 0, "message": ""}
 _thread: threading.Thread | None = None
 
 
+def out_dir() -> Path:
+    """当前下载目录：config 的 download_dir（空则用默认 DATA_DIR/data/downloads）。"""
+    custom = load_config().get("download_dir") or ""
+    base = Path(custom) if custom else DATA_DIR / "data" / "downloads"
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
 def download_status() -> dict:
-    return dict(_download_status)
+    s = dict(_download_status)
+    s["out_dir"] = str(out_dir())
+    return s
 
 
 def list_downloads() -> list[str]:
-    if not OUT_DIR.exists():
+    d = out_dir()
+    if not d.exists():
         return []
     return sorted(
-        [p.name for p in OUT_DIR.iterdir() if p.is_file() and p.suffix in (".mp4", ".mp3", ".m4a", ".webm")],
+        [p.name for p in d.iterdir() if p.is_file() and p.suffix in (".mp4", ".mp3", ".m4a", ".webm")],
         reverse=True,
     )
 
@@ -50,7 +66,7 @@ def start_download(urls: list[str], fmt: str = "mp4") -> dict:
     })
     _thread = threading.Thread(target=_run, args=(list(urls), fmt), daemon=True)
     _thread.start()
-    return {"ok": True}
+    return {"ok": True, "out_dir": str(out_dir())}
 
 
 def _hook(d: dict) -> None:
@@ -65,18 +81,21 @@ def _hook(d: dict) -> None:
 
 
 def _run(urls: list[str], fmt: str) -> None:
-    import yt_dlp
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    d = out_dir()
+    d.mkdir(parents=True, exist_ok=True)
     try:
         cookies = _write_cookies()
         opts = {
-            "outtmpl": f"{OUT_DIR}/%(title)s.%(ext)s",
+            "outtmpl": f"{d}/%(title)s.%(ext)s",
             "quiet": True, "no_warnings": True, "noplaylist": False,
             "progress_hooks": [_hook], "cookiefile": cookies, "retries": 3,
         }
+        ffmpeg = ensure_ffmpeg()
+        if ffmpeg:
+            opts["ffmpeg_location"] = ffmpeg
         if fmt == "audio":
             opts["format"] = "bestaudio/best"
-            if shutil.which("ffmpeg"):
+            if ffmpeg:
                 opts["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]
             else:
                 opts["postprocessors"] = []  # 无 ffmpeg 则直接下 m4a

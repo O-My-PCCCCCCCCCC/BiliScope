@@ -7,7 +7,7 @@ import time
 
 import app.favtools as favtools
 from app.database import get_conn, init_db
-from app.downloader import start_download
+from app.downloader import out_dir, start_download
 from app.llm.base import LLMClient
 
 SYSTEM_PROMPT = (
@@ -64,8 +64,8 @@ TOOL_FUNCS = {
     "move_fav_items": lambda a: favtools.move_fav_items(
         int(a.get("src_media_id", 0)), int(a.get("tar_media_id", 0)), a.get("bvids", [])),
     "analyze_video": lambda a: favtools.analyze_video(a.get("link", "")),
-    "download_videos": lambda a: start_download(a.get("urls", []), "mp4"),
-    "download_audio": lambda a: start_download(a.get("urls", []), "audio"),
+    "download_videos": lambda a: {**start_download(a.get("urls", []), "mp4"), "out_dir": str(out_dir())},
+    "download_audio": lambda a: {**start_download(a.get("urls", []), "audio"), "out_dir": str(out_dir())},
 }
 
 

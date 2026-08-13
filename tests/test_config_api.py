@@ -39,3 +39,12 @@ def test_post_config_keeps_password_when_masked():
                                   "password": "realpw", "to": "b@qq.com"}})
     client.post("/api/config", json={"smtp": {"host": "smtp.qq.com", "password": "******"}})
     assert config.load_config()["smtp"]["password"] == "realpw"
+
+
+def test_config_download_dir_roundtrip():
+    r = client.get("/api/config")
+    assert "download_dir" in r.json()
+
+    r = client.post("/api/config", json={"download_dir": "D:/my_downloads"})
+    assert r.status_code == 200
+    assert client.get("/api/config").json()["download_dir"] == "D:/my_downloads"

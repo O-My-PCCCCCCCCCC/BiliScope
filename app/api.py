@@ -46,6 +46,7 @@ class LlmPayload(BaseModel):
 class ConfigPayload(BaseModel):
     smtp: SmtpPayload | None = None
     llm: LlmPayload | None = None
+    download_dir: str | None = None
 
 
 class ChatPayload(BaseModel):
@@ -227,7 +228,8 @@ def config_get() -> dict:
     llm = dict(cfg.get("llm") or {})
     if llm.get("api_key"):
         llm["api_key"] = MASKED
-    return {"smtp": smtp, "llm": llm, "task_interval": cfg.get("task_interval")}
+    return {"smtp": smtp, "llm": llm, "task_interval": cfg.get("task_interval"),
+            "download_dir": cfg.get("download_dir", "")}
 
 
 @router.post("/config")
@@ -251,6 +253,8 @@ def config_save(payload: ConfigPayload) -> dict:
         key = data.get("api_key")
         if key and key != MASKED:
             llm["api_key"] = key
+    if payload.download_dir is not None:
+        cfg["download_dir"] = payload.download_dir.strip()
     save_config(cfg)
     return {"ok": True}
 
