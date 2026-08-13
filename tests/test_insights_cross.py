@@ -59,3 +59,49 @@ def test_cross_empty(tmp_path):
     database.init_db()
     result = time_content_cross(database.get_conn(), dim="tname")
     assert result["categories"] == []
+
+
+def test_cross_skips_null_view_at(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    conn.execute("INSERT INTO videos (bvid, title, tname) VALUES ('BV1', 'A', '科技')")
+    conn.execute("INSERT INTO history (bvid, view_at, progress) VALUES ('BV1', NULL, 100)")  # NULL view_at
+    conn.commit()
+    conn.close()
+    result = time_content_cross(database.get_conn(), dim="tname")
+    assert result["matrix"] == [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]] or sum(map(sum, result["matrix"])) == 0
+
+
+def test_cross_bucket_boundaries(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    for bvid, hh in [("BV1", 0), ("BV2", 6), ("BV3", 12), ("BV4", 18)]:
+        conn.execute("INSERT INTO videos (bvid, title, tname) VALUES (?, 'T', '科技')", (bvid,))
+        conn.execute("INSERT INTO history (bvid, view_at, progress) VALUES (?, ?, 100)", (bvid, _at(hh)))
+    conn.commit()
+    conn.close()
+    result = time_content_cross(database.get_conn(), dim="tname")
+    ci = result["categories"].index("科技")
+    assert result["matrix"][0][ci] == 1  # 0时→凌晨
+    assert result["matrix"][1][ci] == 1  # 6时→上午
+    assert result["matrix"][2][ci] == 1  # 12时→下午
+    assert result["matrix"][3][ci] == 1  # 18时→晚上
+
+
+def test_cross_other_fallback(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    conn.execute("INSERT INTO videos (bvid, title, tname) VALUES ('BV1', 'A', '')")  # 空 tname
+    conn.execute("INSERT INTO videos (bvid, title, tname) VALUES ('BV2', 'B', '科技')")
+    conn.execute("INSERT INTO history (bvid, view_at, progress) VALUES ('BV1', ?, 100)", (_at(9),))
+    conn.execute("INSERT INTO history (bvid, view_at, progress) VALUES ('BV2', ?, 100)", (_at(9),))
+    conn.commit()
+    conn.close()
+    result = time_content_cross(database.get_conn(), dim="tname")
+    assert "其他" in result["categories"]
+    ci = result["categories"].index("其他")
+    li = result["buckets"].index("上午(6-12)")
+    assert result["matrix"][li][ci] == 1

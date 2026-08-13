@@ -30,3 +30,18 @@ def test_time_invest(tmp_path):
     assert by_cat["其他"] == 1200     # BV2(1000) + BV3(200) 无 category
     by_tag = {r["name"]: r["seconds"] for r in result["by_tag"]}
     assert by_tag["AI"] == 3000
+
+
+def test_time_invest_ignores_non_list_tags(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    now = int(time.time())
+    conn.execute("INSERT INTO videos (bvid, title, up_name, duration) VALUES ('BV1','A','UP甲',100)")
+    conn.execute("INSERT INTO history (bvid, view_at, progress) VALUES ('BV1', ?, 100)", (now,))
+    conn.execute("INSERT INTO video_analysis (bvid, tags_json, summary, category) VALUES ('BV1', '123', 's', '学习提升')")  # JSON 数字
+    conn.commit()
+    conn.close()
+    result = time_invest(database.get_conn())
+    assert {r["name"] for r in result["by_category"]} == {"学习提升"}
+    assert result["by_tag"] == []  # 非数组 tags 不产生标签，不崩溃

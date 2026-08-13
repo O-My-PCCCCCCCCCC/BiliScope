@@ -41,7 +41,9 @@ def interest_drift(conn: sqlite3.Connection, months: int = 12,
     for r in rows:
         try:
             tags = json.loads(r["tags_json"] or "[]")
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(tags, list):
             continue
         mo = time.strftime("%Y-%m", time.localtime(r["t"]))
         if mo not in monthly:

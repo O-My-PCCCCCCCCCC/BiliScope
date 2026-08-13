@@ -30,6 +30,7 @@ def time_content_cross(conn: sqlite3.Connection, dim: str = "tname",
                    CAST(strftime('%H', h.view_at, 'unixepoch', 'localtime') AS INTEGER) AS hour,
                    COUNT(*) AS n
             FROM history h {join_clause}
+            WHERE h.view_at IS NOT NULL
             GROUP BY dim, hour"""
     ).fetchall()]
     totals: dict[str, int] = {}

@@ -25,7 +25,9 @@ def time_invest(conn: sqlite3.Connection, top_n: int = 15) -> dict:
         by_up[up] = by_up.get(up, 0) + secs
         try:
             tags = json.loads(r["tags_json"] or "[]")
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, TypeError):
+            tags = []
+        if not isinstance(tags, list):
             tags = []
         for t in tags:
             by_tag[t] = by_tag.get(t, 0) + secs

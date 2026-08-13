@@ -59,3 +59,17 @@ def test_interest_drift_empty(tmp_path):
     result = interest_drift(database.get_conn(), months=3)
     assert result["series"] == []
     assert len(result["months"]) == 3
+
+
+def test_interest_drift_ignores_non_list_tags(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    now = int(time.time())
+    conn.execute("INSERT INTO videos (bvid, title) VALUES ('BV1', 'A')")
+    conn.execute("INSERT INTO history (bvid, view_at, progress) VALUES ('BV1', ?, 100)", (now,))
+    conn.execute("INSERT INTO video_analysis (bvid, tags_json, summary) VALUES ('BV1', '{\"a\": 1}', 's')")  # 合法 JSON 但非数组
+    conn.commit()
+    conn.close()
+    result = interest_drift(database.get_conn(), months=3)
+    assert result["series"] == []  # 脏行被跳过，不崩溃
