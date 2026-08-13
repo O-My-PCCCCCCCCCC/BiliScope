@@ -425,11 +425,13 @@ const Analysis = {
       <template #header>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span>🤖 AI 分析报告</span>
-          <el-button type="primary" size="small" @click="genAiReport" :loading="aiLoading">生成分析报告</el-button>
+          <el-button type="primary" size="small" @click="genAiReport" :loading="aiLoading">{{ aiReport.narrative ? '重新生成' : '生成报告' }}</el-button>
         </div>
       </template>
       <div v-if="aiReport.narrative" class="weekly-report">{{ aiReport.narrative }}</div>
-      <div v-else style="color:#999;font-size:13px">用 AI 把全部观看数据汇总成你的 B 站画像 + 关键发现。需先在设置页配置 LLM（DeepSeek / Ollama）。</div>
+      <div v-else style="color:#999;font-size:13px">
+        {{ aiLoading ? '正在生成分析报告...' : '用 AI 把全部观看数据汇总成你的 B 站画像 + 关键发现。需先在设置页配置 LLM（DeepSeek / Ollama）。' }}
+      </div>
       <div v-for="f in aiReport.findings" :key="f.title" style="margin-top:10px">
         <el-tag size="small" type="warning" effect="plain">🔍 {{ f.title }}</el-tag>
         <div style="color:#bbb;font-size:13px;margin-top:4px;line-height:1.6">{{ f.detail }}</div>
@@ -437,112 +439,95 @@ const Analysis = {
     </el-card>
 
     <el-row :gutter="12" class="cards" style="margin-bottom:16px">
-      <el-col :span="4" v-for="k in coreCards" :key="k.label">
-        <el-card><div class="card-num">{{ k.value }}</div><div class="card-label">{{ k.label }}</div><div class="card-sub">{{ k.sub }}</div></el-card>
+      <el-col :span="3" v-for="k in coreCards" :key="k.label">
+        <el-card><div class="card-num" style="font-size:22px">{{ k.value }}</div><div class="card-label">{{ k.label }}</div><div class="card-sub">{{ k.sub }}</div></el-card>
       </el-col>
-    </el-row>
-
-    <el-row :gutter="12" class="cards" style="margin-bottom:16px">
-      <el-col :span="8"><el-card><div class="card-num">{{ compare.this?.views ?? '-' }}</div><div class="card-label">本月观看（上月 {{ compare.last?.views ?? '-' }}）</div></el-card></el-col>
-      <el-col :span="8"><el-card><div class="card-num">{{ compare.this?.days ?? '-' }}</div><div class="card-label">本月活跃天数（上月 {{ compare.last?.days ?? '-' }}）</div></el-card></el-col>
-      <el-col :span="8"><el-card><div class="card-num">{{ favGrowthLast }}</div><div class="card-label">本月新增收藏</div></el-card></el-col>
-    </el-row>
-
-    <el-card style="margin-bottom:16px">
-      <template #header>📈 趋势</template>
-      <el-row :gutter="12">
-        <el-col :span="8"><div data-monthly class="chart"></div></el-col>
-        <el-col :span="8"><div data-favgrowth class="chart"></div></el-col>
-        <el-col :span="8"><div data-topup class="chart"></div></el-col>
-      </el-row>
-    </el-card>
-
-    <el-card style="margin-bottom:16px">
-      <template #header>⏱️ 时间花在哪</template>
-      <div v-if="investTip" style="color:#e6a23c;font-size:13px;margin-bottom:10px">{{ investTip }}</div>
-      <el-row :gutter="12">
-        <el-col :span="12"><div data-inv-cat class="chart"></div></el-col>
-        <el-col :span="12"><div data-inv-up class="chart"></div></el-col>
-      </el-row>
-    </el-card>
-
-    <el-card style="margin-bottom:16px">
-      <template #header>🧭 兴趣怎么变（近 12 个月）</template>
-      <div v-if="!interest.series.length" class="empty-tip">还没有主题数据，请先到下方「分析管理」分析视频</div>
-      <div v-else data-interest class="chart"></div>
-    </el-card>
-
-    <el-card style="margin-bottom:16px">
-      <template #header>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span>🌙 什么时候看</span>
-          <el-radio-group v-model="crossDim" size="small" @change="renderCross">
-            <el-radio-button value="tname">分区</el-radio-button>
-            <el-radio-button value="category">用途</el-radio-button>
-          </el-radio-group>
-        </div>
-      </template>
-      <div data-cross class="chart"></div>
-      <div v-if="night.night_ratio !== undefined" style="margin-top:8px;color:#888;font-size:13px">
-        🦉 深夜(0-6)占比 <b style="color:#fb7299">{{ night.night_ratio }}%</b>（{{ night.night_level }}）· 工作日占比 {{ night.weekday_ratio }}%
-      </div>
-      <el-row :gutter="12" style="margin-top:8px">
-        <el-col :span="8"><div data-completion class="chart"></div></el-col>
-        <el-col :span="8"><div data-popularity class="chart"></div></el-col>
-        <el-col :span="8"><div data-weekend class="chart"></div></el-col>
-      </el-row>
-    </el-card>
-
-    <el-row :gutter="12" style="margin-bottom:16px">
-      <el-col :span="12"><el-card>
-        <template #header>📁 收藏行为（吃灰率 {{ graveyard.pct }}%）</template>
-        <div v-if="graveyard.total" style="color:#e6a23c;font-size:13px;margin-bottom:8px">
-          {{ graveyard.graveyard }}/{{ graveyard.total }} 个收藏从没看过
-        </div>
-        <el-table :data="graveyardItems" size="small" max-height="300" style="width:100%">
-          <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip/>
-          <el-table-column prop="up_name" label="UP主" width="100" show-overflow-tooltip/>
-        </el-table>
-        <div v-if="!graveyardItems.length" class="empty-tip">没有吃灰收藏 🎉</div>
-      </el-card></el-col>
-      <el-col :span="12"><el-card>
-        <template #header>🔁 重复观看 TOP</template>
-        <el-table :data="repeat" size="small" max-height="300" style="width:100%">
-          <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip/>
-          <el-table-column label="看了几遍" width="80"><template #default="s">{{ s.row.views }} 遍</template></el-table-column>
-          <el-table-column label="累计" width="90"><template #default="s">{{ (s.row.total_sec / 3600).toFixed(1) }}h</template></el-table-column>
-        </el-table>
-        <div v-if="!repeat.length" class="empty-tip">没有重复观看的视频</div>
+      <el-col :span="6"><el-card>
+        <div class="card-num" style="font-size:22px">{{ compare.this?.views ?? '-' }}<span style="font-size:13px;color:#666"> / 上月 {{ compare.last?.views ?? '-' }}</span></div>
+        <div class="card-label">本月观看</div>
+        <div class="card-sub">活跃 {{ compare.this?.days ?? '-' }} 天 · 新增收藏 {{ favGrowthLast }}</div>
       </el-card></el-col>
     </el-row>
 
-    <el-card style="margin-bottom:16px">
-      <template #header>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span>👤 UP主与活跃</span>
-          <el-button size="small" type="primary" @click="collectFollowers" :loading="followerLoading">采集粉丝快照</el-button>
-        </div>
-      </template>
-      <el-row :gutter="12">
-        <el-col :span="10">
-          <div v-if="streak.active_days" style="color:#999;font-size:13px;margin-bottom:8px">
-            📅 最长连续观看 <b style="color:#fb7299">{{ streak.longest_streak }} 天</b> · 活跃 {{ streak.active_days }} 天
+    <el-row :gutter="16" style="margin-bottom:16px">
+      <el-col :span="12"><el-card>
+        <template #header>⏱️ 时间花在哪</template>
+        <div v-if="investTip" style="color:#e6a23c;font-size:13px;margin-bottom:6px">{{ investTip }}</div>
+        <div data-inv-cat class="chart" style="height:150px"></div>
+        <div data-inv-up class="chart" style="height:150px"></div>
+      </el-card></el-col>
+      <el-col :span="12"><el-card>
+        <template #header>🧭 兴趣怎么变（近 12 个月）</template>
+        <div v-if="!interest.series.length" class="empty-tip">还没主题数据，先分析视频</div>
+        <div v-else data-interest class="chart" style="height:320px"></div>
+      </el-card></el-col>
+    </el-row>
+
+    <el-row :gutter="16" style="margin-bottom:16px">
+      <el-col :span="12"><el-card>
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span>🌙 什么时候看</span>
+            <el-radio-group v-model="crossDim" size="small" @change="renderCross">
+              <el-radio-button value="tname">分区</el-radio-button>
+              <el-radio-button value="category">用途</el-radio-button>
+            </el-radio-group>
           </div>
-          <div data-calendar class="chart" style="height:180px"></div>
-        </el-col>
-        <el-col :span="14">
-          <el-table :data="upFollowers" size="small" max-height="240" style="width:100%">
-            <el-table-column prop="uname" label="UP主" show-overflow-tooltip/>
-            <el-table-column label="粉丝数" width="100">
-              <template #default="s">{{ fmtNum(s.row.points[s.row.points.length - 1]?.follower) }}</template>
-            </el-table-column>
-            <el-table-column label="快照" width="70">
-              <template #default="s">{{ s.row.points.length }} 次</template>
-            </el-table-column>
-          </el-table>
-        </el-col>
-      </el-row>
-    </el-card>
+        </template>
+        <div data-cross class="chart" style="height:240px"></div>
+        <div v-if="night.night_ratio !== undefined" style="margin-top:6px;color:#888;font-size:12px">
+          🦉 深夜 {{ night.night_ratio }}%（{{ night.night_level }}）· 工作日 {{ night.weekday_ratio }}%
+        </div>
+      </el-card></el-col>
+      <el-col :span="12"><el-card>
+        <template #header>📅 活跃日历（90 天）</template>
+        <div v-if="streak.active_days" style="color:#999;font-size:13px;margin-bottom:6px">
+          最长连续 <b style="color:#fb7299">{{ streak.longest_streak }} 天</b> · 活跃 {{ streak.active_days }} 天
+        </div>
+        <div data-calendar class="chart" style="height:210px"></div>
+      </el-card></el-col>
+    </el-row>
+
+    <el-row :gutter="16" style="margin-bottom:16px">
+      <el-col :span="12"><el-card>
+        <template #header>📁 收藏与重复</template>
+        <el-tabs v-model="gyTab" size="small">
+          <el-tab-pane :label="'吃灰 ' + graveyard.pct + '%'" name="gy">
+            <el-table :data="graveyardItems" size="small" max-height="220" style="width:100%">
+              <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip/>
+              <el-table-column prop="up_name" label="UP主" width="90" show-overflow-tooltip/>
+            </el-table>
+            <div v-if="!graveyardItems.length" class="empty-tip">没有吃灰收藏 🎉</div>
+          </el-tab-pane>
+          <el-tab-pane :label="'重复看 ' + repeat.length" name="rep">
+            <el-table :data="repeat" size="small" max-height="220" style="width:100%">
+              <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip/>
+              <el-table-column label="遍数" width="60"><template #default="s">{{ s.row.views }}</template></el-table-column>
+              <el-table-column label="累计" width="80"><template #default="s">{{ (s.row.total_sec / 3600).toFixed(1) }}h</template></el-table-column>
+            </el-table>
+            <div v-if="!repeat.length" class="empty-tip">没有重复观看的视频</div>
+          </el-tab-pane>
+        </el-tabs>
+      </el-card></el-col>
+      <el-col :span="12"><el-card>
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span>👤 UP主 & 趋势</span>
+            <el-button size="small" type="primary" @click="collectFollowers" :loading="followerLoading">采集粉丝</el-button>
+          </div>
+        </template>
+        <el-row :gutter="8">
+          <el-col :span="12"><div data-monthly class="chart" style="height:160px"></div></el-col>
+          <el-col :span="12"><div data-topup class="chart" style="height:160px"></div></el-col>
+        </el-row>
+        <el-table :data="upFollowers" size="small" max-height="150" style="width:100%">
+          <el-table-column prop="uname" label="UP主" show-overflow-tooltip/>
+          <el-table-column label="粉丝" width="90">
+            <template #default="s">{{ fmtNum(s.row.points[s.row.points.length - 1]?.follower) }}</template>
+          </el-table-column>
+        </el-table>
+      </el-card></el-col>
+    </el-row>
 
     <el-card>
       <template #header>分析管理</template>
@@ -572,6 +557,7 @@ const Analysis = {
     const upDepth = ref([]);
     const aiReport = ref({ narrative: '', findings: [] });
     const aiLoading = ref(false);
+    const gyTab = ref('gy');
     const monthly = ref([]);
     const topUps = ref([]);
     const compare = ref({ this: null, last: null });
@@ -637,7 +623,11 @@ const Analysis = {
       aiLoading.value = true;
       try {
         aiReport.value = await api('/analysis/ai-report', { method: 'POST' });
-      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+        try { sessionStorage.setItem('aiReport', JSON.stringify(aiReport.value)); } catch (e) {}
+      } catch (e) {
+        // 未配置 LLM 时静默保留提示文案，其余错误才提示
+        if (!String(e.message).includes('LLM')) ElementPlus.ElMessage.error(e.message);
+      }
       finally { aiLoading.value = false; }
     }
 
@@ -781,10 +771,18 @@ const Analysis = {
       await loadStatus();
       nextTick(renderAll);
     }
-    onMounted(loadAll);
+    onMounted(() => {
+      // AI 报告：优先用本次会话缓存，没有就自动生成一次
+      try {
+        const cached = sessionStorage.getItem('aiReport');
+        if (cached) aiReport.value = JSON.parse(cached);
+      } catch (e) {}
+      loadAll();
+      if (!aiReport.value.narrative) genAiReport();
+    });
     return { coreCards, investTip, aiReport, aiLoading, genAiReport, interest, cross, crossDim, renderCross,
              night, graveyard, graveyardItems, repeat, streak, status, runState, run, rerunAll, running,
-             compare, favGrowthLast, upFollowers, followerLoading, collectFollowers, fmtNum };
+             compare, favGrowthLast, upFollowers, followerLoading, collectFollowers, fmtNum, gyTab };
   },
 };
 
