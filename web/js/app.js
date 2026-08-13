@@ -19,6 +19,11 @@ async function api(path, options = {}) {
   return data;
 }
 
+// 全局错误提示：页面脚本出问题直接显示在界面上，方便定位
+window.addEventListener('error', (e) => {
+  try { ElementPlus.ElMessage.error('页面脚本错误：' + (e.message || '未知错误')); } catch (err) {}
+});
+
 // 共用环形图配置（confine 防止 tooltip 被裁剪）
 const PIE_COLORS = ['#fb7299', '#f6c445', '#7ecbf2', '#9cd6a5', '#b9a6ff', '#f2918e', '#66c7b8', '#d9a0ff', '#8fc1e3', '#e3b0ff'];
 function pieOption(title, data) {
@@ -592,8 +597,13 @@ const Analysis = {
     }
 
     function mk(sel, option) {
-      const el = document.querySelector(sel);
-      if (el) echarts.init(el, 'dark').setOption(option);
+      try {
+        const el = document.querySelector(sel);
+        if (el) echarts.init(el, 'dark').setOption(option);
+      } catch (err) {
+        console.error('图表渲染失败', sel, err);
+        ElementPlus.ElMessage.error(`图表「${sel}」渲染失败：${err.message}`);
+      }
     }
     const barOpt = (title, list, color) => ({
       title: { text: title, textStyle: { fontSize: 13 } },
@@ -826,8 +836,13 @@ const Insights = {
       finally { personaLoading.value = false; }
     }
     function mk(sel, option) {
-      const el = document.querySelector(sel);
-      if (el) echarts.init(el, 'dark').setOption(option);
+      try {
+        const el = document.querySelector(sel);
+        if (el) echarts.init(el, 'dark').setOption(option);
+      } catch (err) {
+        console.error('图表渲染失败', sel, err);
+        ElementPlus.ElMessage.error(`图表「${sel}」渲染失败：${err.message}`);
+      }
     }
     async function loadInterest() {
       interest.value = await api('/insights/interest?months=12').catch(() => ({ months: [], series: [] }));
@@ -1888,6 +1903,10 @@ const App = {
 };
 
 const app = createApp(App);
+app.config.errorHandler = (err, instance, info) => {
+  console.error('Vue 错误:', err, info);
+  try { ElementPlus.ElMessage.error('页面错误：' + (err && err.message ? err.message : String(err))); } catch (e) {}
+};
 for (const [name, comp] of Object.entries(ElementPlusIconsVue)) {
   app.component(name, comp);
 }
