@@ -429,6 +429,92 @@ const Analysis = {
   },
 };
 
+const Insights = {
+  template: `
+    <h2>洞察</h2>
+    <el-card style="margin-bottom:16px">
+      <template #header>兴趣漂移（近 12 个月主题标签）</template>
+      <div v-if="!interest.series.length" class="empty-tip">还没有主题数据，请先到「内容分析」页点「分析未分析视频」</div>
+      <div v-else data-interest class="chart"></div>
+    </el-card>
+    <el-card style="margin-bottom:16px">
+      <template #header>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span>时段 × 内容</span>
+          <el-radio-group v-model="crossDim" size="small" @change="loadCross">
+            <el-radio-button value="tname">分区</el-radio-button>
+            <el-radio-button value="category">用途</el-radio-button>
+          </el-radio-group>
+        </div>
+      </template>
+      <div data-cross class="chart"></div>
+    </el-card>
+    <el-card>
+      <template #header>时间投资榜（实际观看时长 TOP）</template>
+      <el-row :gutter="12">
+        <el-col :span="8"><el-card shadow="never"><div data-invest-cat class="chart"></div></el-card></el-col>
+        <el-col :span="8"><el-card shadow="never"><div data-invest-tag class="chart"></div></el-card></el-col>
+        <el-col :span="8"><el-card shadow="never"><div data-invest-up class="chart"></div></el-card></el-col>
+      </el-row>
+    </el-card>
+  `,
+  setup() {
+    const interest = ref({ months: [], series: [] });
+    const crossDim = ref('tname');
+    function mk(sel, option) {
+      const el = document.querySelector(sel);
+      if (el) echarts.init(el, 'dark').setOption(option);
+    }
+    async function loadInterest() {
+      interest.value = await api('/insights/interest?months=12').catch(() => ({ months: [], series: [] }));
+      nextTick(() => {
+        mk('[data-interest]', {
+          title: { text: '兴趣漂移', textStyle: { fontSize: 14 } },
+          tooltip: { trigger: 'axis', confine: true },
+          legend: { type: 'scroll', textStyle: { color: '#999', fontSize: 10 }, top: 0 },
+          xAxis: { type: 'category', data: interest.value.months },
+          yAxis: { type: 'value' },
+          series: interest.value.series.map(s => ({ name: s.tag, type: 'line', stack: 'all', smooth: true, data: s.data })),
+        });
+      });
+    }
+    async function loadCross() {
+      const d = await api(`/insights/cross?dim=${crossDim.value}`).catch(() => ({ buckets: [], categories: [], matrix: [] }));
+      nextTick(() => {
+        mk('[data-cross]', {
+          title: { text: crossDim.value === 'tname' ? '时段 × 分区' : '时段 × 用途', textStyle: { fontSize: 14 } },
+          tooltip: { position: 'top' },
+          grid: { left: 90, right: 30, top: 40 },
+          xAxis: { type: 'category', data: d.buckets, splitArea: { show: true } },
+          yAxis: { type: 'category', data: d.categories, splitArea: { show: true } },
+          visualMap: { min: 0, max: Math.max(1, ...d.matrix.flat()), inRange: { color: ['#2a2a2a', '#fb7299'] } },
+          series: [{ type: 'heatmap',
+                     data: d.buckets.flatMap((b, bi) => d.categories.map((c, ci) => [bi, ci, d.matrix[bi]?.[ci] || 0])) }],
+        });
+      });
+    }
+    async function loadInvest() {
+      const d = await api('/insights/invest').catch(() => ({ by_category: [], by_tag: [], by_up: [] }));
+      const barOpt = (title, list) => ({
+        title: { text: title, textStyle: { fontSize: 13 } },
+        tooltip: { trigger: 'axis', confine: true, formatter: p => `${p[0].name}<br/>${(p[0].value / 3600).toFixed(1)} 小时` },
+        grid: { left: 90, right: 30, top: 30 },
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: list.slice(0, 10).map(x => x.name).reverse(), axisLabel: { fontSize: 10 } },
+        series: [{ type: 'bar', data: list.slice(0, 10).map(x => x.seconds).reverse(),
+                   itemStyle: { color: '#7ecbf2' }, barMaxWidth: 12 }],
+      });
+      nextTick(() => {
+        mk('[data-invest-cat]', barOpt('按用途', d.by_category));
+        mk('[data-invest-tag]', barOpt('按主题', d.by_tag));
+        mk('[data-invest-up]', barOpt('按UP主', d.by_up));
+      });
+    }
+    onMounted(() => { loadInterest(); loadCross(); loadInvest(); });
+    return { interest, crossDim, loadCross };
+  },
+};
+
 const Overview = {
   props: ['status'],
   template: `
@@ -1286,7 +1372,7 @@ const SearchResult = {
 };
 
 const App = {
-  components: { Overview, ContentBrowser, Monitor, Analysis, Downloads, SearchResult, Chat, Settings },
+  components: { Overview, ContentBrowser, Monitor, Analysis, Insights, Downloads, SearchResult, Chat, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
@@ -1301,6 +1387,7 @@ const App = {
           <el-menu-item index="content"><el-icon><FolderOpened/></el-icon>内容浏览</el-menu-item>
           <el-menu-item index="monitor"><el-icon><Bell/></el-icon>监测中心<el-badge :value="status.alerts_unread || 0" :hidden="!(status.alerts_unread)" class="menu-badge"/></el-menu-item>
           <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>内容分析</el-menu-item>
+          <el-menu-item index="insights"><el-icon><TrendCharts/></el-icon>洞察</el-menu-item>
           <el-menu-item index="downloads"><el-icon><Download/></el-icon>下载管理</el-menu-item>
           <el-menu-item index="chat"><el-icon><ChatDotRound/></el-icon>AI 助手</el-menu-item>
           <el-menu-item index="settings"><el-icon><Setting/></el-icon>设置</el-menu-item>
@@ -1327,6 +1414,7 @@ const App = {
         <ContentBrowser v-else-if="route === 'content'"/>
         <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
         <Analysis v-else-if="route === 'analysis'"/>
+        <Insights v-else-if="route === 'insights'"/>
         <Downloads v-else-if="route === 'downloads'"/>
         <SearchResult v-else-if="route === 'search'" :q="searchQ"/>
         <Chat v-else-if="route === 'chat'"/>
