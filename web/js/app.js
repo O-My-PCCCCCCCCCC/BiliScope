@@ -478,6 +478,27 @@ const Overview = {
       <el-col :span="8"><el-card><div data-popularity class="chart"></div></el-card></el-col>
       <el-col :span="8"><el-card><div data-weekend class="chart"></div></el-card></el-col>
     </el-row>
+    <el-row :gutter="12" style="margin-top:16px">
+      <el-col :span="7"><el-card><div data-catpie class="chart"></div></el-card></el-col>
+      <el-col :span="17"><el-card>
+        <template #header>视频用途（有用 vs 娱乐）</template>
+        <el-tabs v-model="catTab">
+          <el-tab-pane :label="'有用 ' + catData.useful.length" name="useful">
+            <el-table :data="catData.useful" size="small" max-height="280" style="width:100%">
+              <el-table-column prop="title" label="标题" min-width="220"/>
+              <el-table-column prop="category" label="类别" width="90"/>
+            </el-table>
+          </el-tab-pane>
+          <el-tab-pane :label="'娱乐 ' + catData.waste.length" name="waste">
+            <el-table :data="catData.waste" size="small" max-height="280" style="width:100%">
+              <el-table-column prop="title" label="标题" min-width="220"/>
+              <el-table-column prop="category" label="类别" width="90"/>
+            </el-table>
+          </el-tab-pane>
+        </el-tabs>
+        <div v-if="!(catData.useful.length + catData.waste.length)" class="empty-tip">还没分类数据，去「内容分析」页点分析</div>
+      </el-card></el-col>
+    </el-row>
     <el-collapse style="margin-top:16px">
       <el-collapse-item title="UP主深度榜（观看时长 TOP）" name="up">
         <el-table :data="upDepth" size="small" style="width:100%">
@@ -541,6 +562,8 @@ const Overview = {
         { label: '吃灰收藏', value: graveyardItems.value.length },
       ];
     });
+    const catData = ref({ distribution: [], useful: [], waste: [] });
+    const catTab = ref('useful');
     const compare = ref({ this: null, last: null, labels: {} });
     const favGrowth = ref([]);
     const upFollowers = ref([]);
@@ -560,11 +583,12 @@ const Overview = {
       finally { followerLoading.value = false; }
     }
     async function load() {
-      const [ov, prof, mo, det, gy, cmp, uf] = await Promise.all([
+      const [ov, prof, mo, det, gy, cmp, uf, cat] = await Promise.all([
         api('/stats/overview'), api('/analysis/profile'), api('/analysis/monthly'),
         api('/analysis/detailed'), api('/analysis/graveyard-list'),
-        api('/analysis/compare'), api('/analysis/up-followers'),
-      ]).catch(() => [null, null, [], null, [], null, []]);
+        api('/analysis/compare'), api('/analysis/up-followers'), api('/analysis/category'),
+      ]).catch(() => [null, null, [], null, [], null, [], null]);
+      if (cat) catData.value = cat;
       if (!prof) return;
       profile.value = prof;
       monthly.value = mo;
@@ -609,11 +633,14 @@ const Overview = {
           series: [{ type: 'line', smooth: true, data: favGrowth.value.map(x => x.n),
                      itemStyle: { color: '#f6c445' } }],
         });
+        mk('[data-catpie]', pieOption(
+          '视频用途占比', catData.value.distribution.map(x => ({ name: x.category, value: x.n }))
+        ));
       });
     }
     onMounted(load);
     return { kpis, compare, favGrowthLast, upFollowers, fmtNum, followerLoading, collectFollowers,
-             upDepth, graveyardItems, fmt, timeAgo, weeklyReport, weeklyLoading, genWeekly };
+             catData, catTab, upDepth, graveyardItems, fmt, timeAgo, weeklyReport, weeklyLoading, genWeekly };
   },
 };
 
