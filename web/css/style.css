@@ -110,6 +110,97 @@ h2 { margin: 8px 0 16px; font-size: 20px; }
   .chart { height: 220px; }
   .fav-side { width: 130px; }
 }
+
+/* ============ UI 整体美化 ============ */
+:root {
+  --el-color-primary: #fb7299;
+  --el-color-primary-light-3: #fb87a8;
+  --el-color-primary-light-5: #fca0ba;
+  --el-color-primary-light-7: #fdc4d4;
+  --el-color-primary-light-8: #fdd6e1;
+  --el-color-primary-light-9: #2a2026;
+  --el-color-primary-dark-2: #d95f82;
+}
+html.dark {
+  --el-bg-color: #141418;
+  --el-bg-color-overlay: #1e1e24;
+  --el-bg-color-page: #141418;
+  --el-border-color: #2c2c33;
+  --el-border-color-light: #2c2c33;
+  --el-border-color-lighter: #26262c;
+  --el-fill-color-blank: #1a1a1f;
+  --el-fill-color-light: #222228;
+  --el-fill-color-lighter: #26262c;
+  --el-text-color-primary: #e8e8ec;
+  --el-text-color-regular: #cfcfd6;
+  --el-mask-color: rgba(0, 0, 0, .55);
+}
+body { background: #141418; }
+
+/* 卡片：更精致的边框/圆角/阴影/悬停 */
+.el-card {
+  border: 1px solid #2a2a31 !important;
+  border-radius: 14px !important;
+  background: #1b1b20 !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+.el-card:hover { border-color: #3a3a44; box-shadow: 0 4px 18px rgba(0, 0, 0, .3); }
+.el-card__header { border-bottom: 1px solid #2a2a31; color: #ddd; font-weight: 600; padding: 12px 16px; }
+
+/* 主按钮渐变粉 */
+.el-button--primary { background: linear-gradient(135deg, #fb7299, #f5688a); border: none; box-shadow: 0 2px 8px rgba(251, 114, 153, .3); }
+.el-button--primary:hover, .el-button--primary:focus { opacity: .88; background: linear-gradient(135deg, #fb7299, #f5688a); }
+
+/* 菜单 */
+.el-menu { border-right: none !important; background: transparent; }
+.el-menu-item { border-radius: 10px; margin: 2px 10px; height: 44px; color: #bbb; }
+.el-menu-item:hover { background: #24242b; color: #fff; }
+.el-menu-item.is-active { background: rgba(251, 114, 153, .14) !important; color: #fb7299 !important; font-weight: 600; }
+
+/* 页面标题：左侧粉色竖条 */
+h2 { font-size: 20px; font-weight: 700; letter-spacing: .5px; position: relative; padding-left: 14px; }
+h2::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 4px; border-radius: 2px; background: linear-gradient(180deg, #fb7299, #f5688a); }
+
+/* 指标卡数字渐变 + 卡片轻微内间距 */
+.card-num { background: linear-gradient(135deg, #fb7299, #ffa3bd); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.card-label { color: #a6a6ae; }
+.card-sub { color: #6f6f78; }
+.el-card .card-num { padding-top: 4px; }
+
+/* logo 渐变 */
+.logo { background: linear-gradient(135deg, #fb7299, #ff9ab5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.logo-ver { -webkit-text-fill-color: #6a6a72; }
+
+/* AI 报告文案卡片化 */
+.weekly-report { background: rgba(251, 114, 153, .06); border-left: 3px solid #fb7299; border-radius: 10px; padding: 12px 14px; line-height: 1.8; }
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #34343c; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #46464f; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* 表格配色 */
+.el-table {
+  --el-table-border-color: #26262c;
+  --el-table-header-bg-color: #1f1f25;
+  --el-table-tr-bg-color: #1b1b20;
+  --el-table-row-hover-bg-color: #24242b;
+}
+.el-table th.el-table__cell { color: #a6a6ae; font-weight: 600; }
+
+/* 收藏夹侧栏选中态 */
+.fav-side-item.active { background: rgba(251, 114, 153, .12); }
+
+/* 输入框圆角 */
+.el-input__wrapper { border-radius: 8px; }
+
+/* 侧边栏账号卡 */
+.account-card { border: 1px solid #2c2c33; }
+
+/* 空态提示更柔和 */
+.empty-tip { color: #6f6f78; }
 .thinking .dot { animation: blink 1.2s infinite; }
 .thinking .dot:nth-child(2) { animation-delay: .2s; }
 .thinking .dot:nth-child(3) { animation-delay: .4s; }
