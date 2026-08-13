@@ -62,3 +62,29 @@ def test_aggregate_themes(tmp_path):
     assert by_tag["科技"] == 2
     assert by_tag["AI"] == 1
     conn.close()
+
+
+def test_graveyard_stats(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    # 3 个收藏：BV1 看过、BV2 没看过、BV3 没看过 → 吃灰 2/3 = 66.7%
+    for bvid in ("BV1", "BV2", "BV3"):
+        conn.execute("INSERT INTO fav_items (media_id, bvid) VALUES (101, ?)", (bvid,))
+    conn.execute("INSERT INTO history (bvid, view_at) VALUES ('BV1', 1)")
+    conn.commit()
+
+    stats = __import__("app.analyze", fromlist=["graveyard_stats"]).graveyard_stats(conn)
+    assert stats["total"] == 3
+    assert stats["graveyard"] == 2
+    assert stats["pct"] == 66.7
+    conn.close()
+
+
+def test_graveyard_stats_empty(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    stats = __import__("app.analyze", fromlist=["graveyard_stats"]).graveyard_stats(conn)
+    assert stats == {"graveyard": 0, "total": 0, "pct": 0}
+    conn.close()

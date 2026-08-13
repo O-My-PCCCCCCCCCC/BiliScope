@@ -128,6 +128,16 @@ def graveyard_list(conn: sqlite3.Connection, limit: int = 100) -> list[dict]:
     ).fetchall()]
 
 
+def graveyard_stats(conn: sqlite3.Connection) -> dict:
+    """收藏夹吃灰统计：吃灰数、总数、百分比。"""
+    total = conn.execute("SELECT COUNT(*) FROM fav_items").fetchone()[0]
+    graveyard = conn.execute(
+        "SELECT COUNT(*) FROM fav_items WHERE bvid NOT IN (SELECT bvid FROM history)"
+    ).fetchone()[0]
+    pct = round(graveyard / total * 100, 1) if total else 0
+    return {"graveyard": graveyard, "total": total, "pct": pct}
+
+
 def watch_completion(conn: sqlite3.Connection) -> list[dict]:
     """观看完整度分布（进度/时长）。"""
     return [dict(r) for r in conn.execute(

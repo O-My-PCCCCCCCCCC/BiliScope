@@ -616,7 +616,7 @@ const Overview = {
           </el-table-column>
         </el-table>
       </el-collapse-item>
-      <el-collapse-item :title="'吃灰收藏明细（' + graveyardItems.length + ' 个）'" name="gy">
+      <el-collapse-item :title="'吃灰收藏明细（' + (graveyardStats.value.total ? graveyardStats.value.graveyard : graveyardItems.length) + ' 个）'" name="gy">
         <el-table :data="graveyardItems" size="small" max-height="360" style="width:100%">
           <el-table-column prop="title" label="标题" min-width="240"/>
           <el-table-column prop="up_name" label="UP主" width="120"/>
@@ -634,6 +634,7 @@ const Overview = {
     const topUps = ref([]);
     const upDepth = ref([]);
     const graveyardItems = ref([]);
+    const graveyardStats = ref({ graveyard: 0, total: 0, pct: 0 });
     const fmt = ts => ts ? new Date(ts * 1000).toLocaleDateString('zh-CN') : '';
     function timeAgo(ts) {
       if (!ts) return '';
@@ -663,7 +664,7 @@ const Overview = {
         { label: '黄金时段', value: p.peak_hour ?? '-' },
         { label: '最活跃周几', value: p.peak_weekday ?? '-' },
         { label: '收藏数', value: c.favorites ?? '-' },
-        { label: '吃灰收藏', value: graveyardItems.value.length },
+        { label: '收藏吃灰率', value: graveyardStats.value.total ? graveyardStats.value.pct + '%' : '-' },
       ];
     });
     const catData = ref({ distribution: [], useful: [], waste: [] });
@@ -687,11 +688,11 @@ const Overview = {
       finally { followerLoading.value = false; }
     }
     async function load() {
-      const [ov, prof, mo, det, gy, cmp, uf, cat] = await Promise.all([
+      const [ov, prof, mo, det, gy, gs, cmp, uf, cat] = await Promise.all([
         api('/stats/overview'), api('/analysis/profile'), api('/analysis/monthly'),
-        api('/analysis/detailed'), api('/analysis/graveyard-list'),
+        api('/analysis/detailed'), api('/analysis/graveyard-list'), api('/analysis/graveyard-stats'),
         api('/analysis/compare'), api('/analysis/up-followers'), api('/analysis/category'),
-      ]).catch(() => [null, null, [], null, [], null, [], null]);
+      ]).catch(() => [null, null, [], null, [], null, null, [], null]);
       if (cat) catData.value = cat;
       if (!prof) return;
       profile.value = prof;
@@ -699,6 +700,7 @@ const Overview = {
       topUps.value = ov?.top_ups || [];
       upDepth.value = det?.up_depth || [];
       graveyardItems.value = gy;
+      if (gs) graveyardStats.value = gs;
       if (cmp) { compare.value = cmp.compare; favGrowth.value = cmp.fav_growth; }
       upFollowers.value = uf || [];
       nextTick(() => {
@@ -744,7 +746,7 @@ const Overview = {
     }
     onMounted(load);
     return { kpis, compare, favGrowthLast, upFollowers, fmtNum, followerLoading, collectFollowers,
-             catData, catTab, upDepth, graveyardItems, fmt, timeAgo, weeklyReport, weeklyLoading, genWeekly };
+             catData, catTab, upDepth, graveyardItems, graveyardStats, fmt, timeAgo, weeklyReport, weeklyLoading, genWeekly };
   },
 };
 

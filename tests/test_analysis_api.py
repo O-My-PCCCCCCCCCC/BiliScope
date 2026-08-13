@@ -47,3 +47,14 @@ def test_hardware_endpoint():
     body = client.get("/api/hardware").json()
     assert "recommended_model" in body
     assert "ram_gb" in body
+
+
+def test_graveyard_stats_endpoint():
+    conn = database.get_conn()
+    conn.execute("INSERT INTO fav_items (media_id, bvid) VALUES (101, 'BV1')")
+    conn.execute("INSERT INTO fav_items (media_id, bvid) VALUES (101, 'BV2')")
+    conn.commit()
+    conn.close()
+
+    body = client.get("/api/analysis/graveyard-stats").json()
+    assert body == {"graveyard": 2, "total": 2, "pct": 100.0}
