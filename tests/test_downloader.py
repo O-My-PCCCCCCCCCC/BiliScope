@@ -92,3 +92,10 @@ def test_run_audio_no_ffmpeg_downloads_m4a(monkeypatch, tmp_path):
     _run(["https://www.bilibili.com/video/BV1xx"], "audio")
     assert "ffmpeg_location" not in captured["opts"]
     assert captured["opts"]["postprocessors"] == []
+
+
+def test_normalize_urls():
+    from app.downloader import normalize_urls
+    assert normalize_urls(["BV1ZagB6cEM6"]) == ["https://www.bilibili.com/video/BV1ZagB6cEM6"]
+    assert normalize_urls(["https://www.bilibili.com/video/BV1xx"]) == ["https://www.bilibili.com/video/BV1xx"]
+    assert normalize_urls(["", "  "]) == []

@@ -1,6 +1,7 @@
 """yt-dlp 批量下载管理器（视频 MP4 / 音频 MP3/m4a），后台任务 + 进度。"""
 from __future__ import annotations
 
+import re
 import shutil
 import threading
 from pathlib import Path
@@ -53,10 +54,30 @@ def _write_cookies() -> str:
     return str(path)
 
 
+_BV_RE = re.compile(r"(BV[0-9A-Za-z]{10})")
+
+
+def normalize_urls(urls: list[str]) -> list[str]:
+    """把裸 BV 号补全为完整链接，其余原样返回。"""
+    out = []
+    for u in urls:
+        u = (u or "").strip()
+        if not u:
+            continue
+        if not u.startswith(("http://", "https://")):
+            m = _BV_RE.search(u)
+            if m:
+                out.append(f"https://www.bilibili.com/video/{m.group(1)}")
+                continue
+        out.append(u)
+    return out
+
+
 def start_download(urls: list[str], fmt: str = "mp4") -> dict:
     global _thread
     if _thread and _thread.is_alive():
         return {"error": "已有下载任务进行中"}
+    urls = normalize_urls(urls)
     if not urls:
         return {"error": "没有要下载的链接"}
     _download_status.update({
