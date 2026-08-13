@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """BiliScope PyInstaller 打包配置（单文件 EXE）。"""
+import version_info as _vi
 from PyInstaller.utils.hooks import collect_all
 
 datas = [('web', 'web')]
@@ -26,4 +27,4 @@ pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, a.binaries, a.datas, [],
           name='BiliScope', debug=False, bootloader_ignore_signals=False,
           strip=False, upx=True, console=True,
-          version='version_info.py')
+          version=_vi.version_info)
