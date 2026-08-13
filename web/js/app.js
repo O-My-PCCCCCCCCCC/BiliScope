@@ -1509,6 +1509,7 @@ const Settings = {
         <el-button type="success" :disabled="!status.logged_in" @click="sync" :loading="syncing">
           立即同步数据
         </el-button>
+        <el-button v-if="status.logged_in" type="danger" plain @click="logout">退出登录</el-button>
       </div>
     </el-card>
     <el-card style="max-width:520px;margin-top:16px">
@@ -1654,6 +1655,16 @@ const Settings = {
       } catch (e) { ElementPlus.ElMessage.error(e.message); }
       finally { syncing.value = false; }
     }
+    async function logout() {
+      try {
+        await ElementPlus.ElMessageBox.confirm('确定退出登录吗？退出后需重新扫码。', '退出登录', { type: 'warning' });
+      } catch (e) { return; }
+      try {
+        await api('/logout', { method: 'POST' });
+        ElementPlus.ElMessage.success('已退出登录');
+        emit('refresh');
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+    }
     async function loadConfig() {
       const c = await api('/config');
       smtp.value = { ...c.smtp };
@@ -1756,7 +1767,7 @@ const Settings = {
     onMounted(() => { loadConfig().catch(() => {}); loadAccount(); });
     return { qrVisible, qrMsg, qrDotColor, syncing, smtp, testing, llm, dl, hwLoading, hwModel, account,
              modelList, modelLoading, installing, ollamaOk, installState, ollamaInstalling,
-             fmt, openQr, stopPoll, sync, saveSmtp, testEmail, saveLlm, saveDownloadDir,
+             fmt, openQr, stopPoll, sync, logout, saveSmtp, testEmail, saveLlm, saveDownloadDir,
              recommendLocal, recommendModels, installModel, installOllama };
   },
 };
@@ -1834,10 +1845,86 @@ const SearchResult = {
   },
 };
 
-const App = {
-  components: { ContentBrowser, Monitor, Analysis, Downloads, SearchResult, Chat, Settings },
+const LoginScreen = {
+  emits: ['login'],
   template: `
-    <el-container class="layout">
+    <div class="login-screen">
+      <div class="login-card">
+        <div class="login-logo">BiliScope</div>
+        <div class="login-sub">本地读取并分析你的 B 站数据 · 所有数据仅存本地</div>
+        <div class="login-qr"><div id="login-qrcode"></div></div>
+        <div class="login-status">
+          <span class="qr-dot" :style="{ background: qrDotColor }"></span>
+          <span :style="{ color: qrDotColor, fontSize: '13px' }">{{ qrMsg }}</span>
+        </div>
+        <div class="login-steps">
+          ① 打开手机 B 站 App<br/>
+          ② 点右上角「扫一扫」扫描上方二维码<br/>
+          ③ 手机上点「确认登录」
+        </div>
+        <el-button size="small" type="primary" plain @click="openQr" :loading="qrRefreshing">刷新二维码</el-button>
+      </div>
+    </div>
+  `,
+  setup(_, { emit }) {
+    const qrMsg = ref('准备中...');
+    const qrStatus = ref('waiting');
+    const qrRefreshing = ref(false);
+    const qrDotColor = Vue.computed(() => ({
+      waiting: '#e6a23c', scanned: '#409eff', ok: '#67c23a', expired: '#f56c6c', error: '#f56c6c',
+    }[qrStatus.value] || '#e6a23c'));
+    let timer = null; let qrKey = '';
+    async function openQr() {
+      qrRefreshing.value = true;
+      stopPoll();
+      qrMsg.value = '正在生成二维码...';
+      try {
+        const d = await api('/login/qrcode');
+        qrKey = d.qrcode_key;
+        qrStatus.value = 'waiting'; qrMsg.value = '等待扫码';
+        nextTick(() => {
+          const el = document.getElementById('login-qrcode');
+          if (el) { el.innerHTML = ''; new QRCode(el, { text: d.url, width: 220, height: 220 }); }
+        });
+        startPoll();
+      } catch (e) {
+        qrStatus.value = 'error'; qrMsg.value = '生成二维码失败：' + e.message;
+      } finally { qrRefreshing.value = false; }
+    }
+    function startPoll() {
+      stopPoll();
+      timer = setInterval(async () => {
+        try {
+          const r = await api(`/login/poll?qrcode_key=${qrKey}`);
+          qrMsg.value = r.message || '...';
+          if (r.status === 'ok') {
+            qrStatus.value = 'ok'; stopPoll();
+            ElementPlus.ElMessage.success('登录成功');
+            emit('login');
+          } else if (r.status === 'scanned') {
+            qrStatus.value = 'scanned';
+          } else if (r.status === 'expired') {
+            qrStatus.value = 'expired'; stopPoll();
+            qrMsg.value = '二维码已失效，点「刷新二维码」重新生成';
+          } else {
+            qrStatus.value = 'waiting';
+          }
+        } catch (e) {}
+      }, 2000);
+    }
+    function stopPoll() { if (timer) { clearInterval(timer); timer = null; } }
+    onMounted(openQr);
+    onBeforeUnmount(stopPoll);
+    return { qrMsg, qrDotColor, qrRefreshing, openQr };
+  },
+};
+
+const App = {
+  components: { ContentBrowser, Monitor, Analysis, Downloads, SearchResult, Chat, Settings, LoginScreen },
+  template: `
+    <div v-if="!booted" class="boot-loading">加载中...</div>
+    <LoginScreen v-else-if="!status.logged_in" @login="loadStatus"/>
+    <el-container v-else class="layout">
       <div v-if="isMobile && menuOpen" class="menu-backdrop" @click="menuOpen = false"></div>
       <el-aside width="220px" class="aside" :class="{ open: isMobile && menuOpen }">
         <div class="logo">BiliScope<span class="logo-ver">v1.1</span></div>
@@ -1914,13 +2001,15 @@ const App = {
       if (!s || !s.current_min || !s.next_exp || s.next_exp <= s.current_min) return 0;
       return Math.min(100, Math.round((s.current_exp - s.current_min) / (s.next_exp - s.current_min) * 100));
     });
+    const booted = ref(false);
     async function loadStatus() {
       try { status.value = await api('/status'); } catch (e) {}
       try { accountInfo.value = await api('/account'); } catch (e) {}
+      booted.value = true;
     }
     onMounted(loadStatus);
     return { route, status, accountInfo, lvPct, loadStatus, imgUrl, searchQ, doSearch,
-             menuOpen, isMobile, onMenuSelect };
+             menuOpen, isMobile, onMenuSelect, booted };
   },
 };
 

@@ -112,6 +112,17 @@ def login_poll(qrcode_key: str = Query(...)) -> dict:
     return result
 
 
+@router.post("/logout")
+def logout() -> dict:
+    """退出登录：清空本地 Cookie，回登录界面。"""
+    cfg = load_config()
+    cfg["cookies"] = {}
+    cfg["uid"] = None
+    cfg["login_at"] = None
+    save_config(cfg)
+    return {"ok": True}
+
+
 @router.get("/alerts")
 def alerts(unread_only: bool = False) -> dict:
     conn = get_conn()

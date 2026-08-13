@@ -76,3 +76,14 @@ def test_poll_scanned_awaits_confirm():
         return httpx.Response(200, json={"code": 0, "data": {"code": 86090, "message": "已扫码待确认"}})
 
     assert make_login(handler).poll("K")["status"] == "scanned"
+
+
+def test_logout_clears_cookies():
+    from fastapi.testclient import TestClient
+    from app import config
+    from app.main import app
+    client = TestClient(app)
+    config.save_cookies({"SESSDATA": "abc"})
+    r = client.post("/api/logout")
+    assert r.status_code == 200
+    assert config.get_cookies() == {}

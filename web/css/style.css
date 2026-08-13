@@ -201,6 +201,16 @@ h2::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; wi
 
 /* 空态提示更柔和 */
 .empty-tip { color: #6f6f78; }
+
+/* 登录界面 */
+.login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: radial-gradient(ellipse at top, #1d1d25, #141418); }
+.login-card { width: 380px; max-width: 100%; text-align: center; padding: 40px 30px 32px; background: #1b1b20; border: 1px solid #2a2a31; border-radius: 20px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
+.login-logo { font-size: 32px; font-weight: 800; letter-spacing: 1px; background: linear-gradient(135deg, #fb7299, #ff9ab5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.login-sub { color: #999; font-size: 13px; margin: 10px 0 26px; }
+.login-qr { background: #fff; padding: 16px; border-radius: 16px; display: inline-block; box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
+.login-status { margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 20px; }
+.login-steps { color: #888; font-size: 12px; margin: 16px 0 18px; line-height: 2; text-align: left; padding-left: 22px; }
+.boot-loading { min-height: 100vh; display: flex; align-items: center; justify-content: center; color: #888; }
 .thinking .dot { animation: blink 1.2s infinite; }
 .thinking .dot:nth-child(2) { animation-delay: .2s; }
 .thinking .dot:nth-child(3) { animation-delay: .4s; }
