@@ -19,8 +19,10 @@ async function api(path, options = {}) {
   return data;
 }
 
-// 全局错误提示：页面脚本出问题直接显示在界面上，方便定位
+// 全局错误提示：页面脚本出问题直接显示在界面上，方便定位。
+// ResizeObserver 循环是浏览器/图表的良性警告，忽略不弹。
 window.addEventListener('error', (e) => {
+  if (e && e.message && e.message.includes('ResizeObserver')) return;
   try { ElementPlus.ElMessage.error('页面脚本错误：' + (e.message || '未知错误')); } catch (err) {}
 });
 
