@@ -7,8 +7,9 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from app.analyze import (aggregate_themes, analysis_stats, analyze_unanalyzed,
-                         daily_calendar, fav_tnames, graveyard_by_tname, graveyard_list,
-                         monthly_trend, popularity, time_buckets, up_depth,
+                         collect_up_followers, daily_calendar, fav_growth, fav_tnames,
+                         graveyard_by_tname, graveyard_list, monthly_compare, monthly_trend,
+                         popularity, time_buckets, up_depth, up_follower_trend,
                          watch_completion, watch_profile, weekday_weekend)
 from app.bilibili import login as login_mod
 from app.bilibili.client import BiliError, UA
@@ -277,6 +278,64 @@ def analysis_run(limit: int = Query(50, ge=1, le=200)) -> dict:
     finally:
         conn.close()
     return {"analyzed": n}
+
+
+@router.get("/analysis/compare")
+def analysis_compare() -> dict:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return {"compare": monthly_compare(conn), "fav_growth": fav_growth(conn)}
+    finally:
+        conn.close()
+
+
+@router.post("/analysis/up-followers")
+def analysis_up_followers() -> dict:
+    if not get_cookies():
+        raise HTTPException(status_code=401, detail="未登录")
+    conn = get_conn()
+    init_db(conn)
+    try:
+        from app.bilibili.client import BiliClient
+        with BiliClient(cookies=get_cookies()) as client:
+            n = collect_up_followers(conn, client, limit=20)
+        trend = up_follower_trend(conn)
+    finally:
+        conn.close()
+    return {"collected": n, "trend": trend}
+
+
+@router.get("/analysis/up-followers")
+def analysis_up_followers_get() -> list:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return up_follower_trend(conn)
+    finally:
+        conn.close()
+
+
+@router.get("/search")
+def search(q: str = Query(...)) -> dict:
+    like = f"%{q}%"
+    conn = get_conn()
+    init_db(conn)
+    try:
+        history = [dict(r) for r in conn.execute(
+            """SELECT h.bvid, h.view_at, v.title, v.up_name, v.pic, v.duration
+               FROM history h JOIN videos v ON h.bvid = v.bvid
+               WHERE v.title LIKE ? OR v.up_name LIKE ?
+               ORDER BY h.view_at DESC LIMIT 20""", (like, like)).fetchall()]
+        favorites = [dict(r) for r in conn.execute(
+            """SELECT f.media_id, f.bvid, v.title, v.up_name, v.pic
+               FROM fav_items f LEFT JOIN videos v ON f.bvid = v.bvid
+               WHERE v.title LIKE ? OR v.up_name LIKE ? LIMIT 20""", (like, like)).fetchall()]
+        followings = [dict(r) for r in conn.execute(
+            "SELECT mid, uname FROM followings WHERE uname LIKE ? LIMIT 20", (like,)).fetchall()]
+    finally:
+        conn.close()
+    return {"history": history, "favorites": favorites, "followings": followings}
 
 
 @router.get("/analysis/detailed")

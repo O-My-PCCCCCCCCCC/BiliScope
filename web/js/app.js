@@ -417,6 +417,31 @@ const Overview = {
         <el-card><div class="card-num">{{ k.value }}</div><div class="card-label">{{ k.label }}</div></el-card>
       </el-col>
     </el-row>
+    <el-row :gutter="12" class="cards" style="margin-bottom:16px">
+      <el-col :span="8"><el-card><div class="card-num">{{ compare.this?.views ?? '-' }}</div><div class="card-label">本月观看（上月 {{ compare.last?.views ?? '-' }}）</div></el-card></el-col>
+      <el-col :span="8"><el-card><div class="card-num">{{ compare.this?.days ?? '-' }}</div><div class="card-label">本月活跃天数（上月 {{ compare.last?.days ?? '-' }}）</div></el-card></el-col>
+      <el-col :span="8"><el-card><div class="card-num">{{ favGrowthLast }}</div><div class="card-label">本月新增收藏</div></el-card></el-col>
+    </el-row>
+    <el-row :gutter="12" class="charts">
+      <el-col :span="12"><el-card><div data-favgrowth class="chart"></div></el-card></el-col>
+      <el-col :span="12"><el-card>
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span>UP主粉丝数（快照）</span>
+            <el-button size="small" type="primary" @click="collectFollowers" :loading="followerLoading">采集快照</el-button>
+          </div>
+        </template>
+        <el-table :data="upFollowers" size="small" max-height="240" style="width:100%">
+          <el-table-column prop="uname" label="UP主"/>
+          <el-table-column label="粉丝数" width="100">
+            <template #default="s">{{ fmtNum(s.row.points[s.row.points.length - 1]?.follower) }}</template>
+          </el-table-column>
+          <el-table-column label="快照" width="70">
+            <template #default="s">{{ s.row.points.length }} 次</template>
+          </el-table-column>
+        </el-table>
+      </el-card></el-col>
+    </el-row>
     <el-row :gutter="12" class="charts">
       <el-col :span="10"><el-card><div data-monthly class="chart"></div></el-card></el-col>
       <el-col :span="7"><el-card><div data-timebuckets class="chart"></div></el-card></el-col>
@@ -488,17 +513,38 @@ const Overview = {
         { label: '吃灰收藏', value: graveyardItems.value.length },
       ];
     });
+    const compare = ref({ this: null, last: null, labels: {} });
+    const favGrowth = ref([]);
+    const upFollowers = ref([]);
+    const followerLoading = ref(false);
+    const favGrowthLast = Vue.computed(() => {
+      const arr = favGrowth.value;
+      return arr.length ? arr[arr.length - 1].n : '-';
+    });
+    function fmtNum(n) { n = n || 0; return n >= 10000 ? (n / 10000).toFixed(1).replace(/\.0$/, '') + '万' : String(n); }
+    async function collectFollowers() {
+      followerLoading.value = true;
+      try {
+        const r = await api('/analysis/up-followers', { method: 'POST' });
+        upFollowers.value = r.trend;
+        ElementPlus.ElMessage.success(`已采集 ${r.collected} 个UP主粉丝数`);
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+      finally { followerLoading.value = false; }
+    }
     async function load() {
-      const [ov, prof, mo, det, gy] = await Promise.all([
+      const [ov, prof, mo, det, gy, cmp, uf] = await Promise.all([
         api('/stats/overview'), api('/analysis/profile'), api('/analysis/monthly'),
         api('/analysis/detailed'), api('/analysis/graveyard-list'),
-      ]).catch(() => [null, null, [], null, []]);
+        api('/analysis/compare'), api('/analysis/up-followers'),
+      ]).catch(() => [null, null, [], null, [], null, []]);
       if (!prof) return;
       profile.value = prof;
       monthly.value = mo;
       topUps.value = ov?.top_ups || [];
       upDepth.value = det?.up_depth || [];
       graveyardItems.value = gy;
+      if (cmp) { compare.value = cmp.compare; favGrowth.value = cmp.fav_growth; }
+      upFollowers.value = uf || [];
       nextTick(() => {
         const mk = (sel, option) => {
           const el = document.querySelector(sel);
@@ -527,10 +573,19 @@ const Overview = {
         pie(det?.completion || [], '[data-completion]', '观看完整度');
         pie(det?.popularity || [], '[data-popularity]', '热门 vs 小众');
         pie(det?.weekday_weekend || [], '[data-weekend]', '工作日 vs 周末');
+        mk('[data-favgrowth]', {
+          title: { text: '收藏增长趋势', textStyle: { fontSize: 14 } },
+          tooltip: { trigger: 'axis', confine: true },
+          xAxis: { type: 'category', data: favGrowth.value.map(x => x.ym) },
+          yAxis: { type: 'value' },
+          series: [{ type: 'line', smooth: true, data: favGrowth.value.map(x => x.n),
+                     itemStyle: { color: '#f6c445' } }],
+        });
       });
     }
     onMounted(load);
-    return { kpis, upDepth, graveyardItems, fmt, timeAgo, weeklyReport, weeklyLoading, genWeekly };
+    return { kpis, compare, favGrowthLast, upFollowers, fmtNum, followerLoading, collectFollowers,
+             upDepth, graveyardItems, fmt, timeAgo, weeklyReport, weeklyLoading, genWeekly };
   },
 };
 
@@ -1114,12 +1169,78 @@ const ContentBrowser = {
   setup() { const tab = ref('history'); return { tab }; },
 };
 
+const SearchResult = {
+  props: ['q'],
+  template: `
+    <h2>搜索结果：{{ q }}</h2>
+    <el-tabs v-model="tab">
+      <el-tab-pane :label="'历史（' + counts.history + '）'" name="history">
+        <div class="bili-grid">
+          <div class="bili-card" v-for="it in history" :key="it.bvid" @click="play(it)">
+            <div class="bili-cover">
+              <img :src="imgUrl(it.pic)" loading="lazy" decoding="async" :alt="it.title"/>
+              <span class="bili-duration">{{ fmtDur(it.duration) }}</span>
+            </div>
+            <div class="bili-title">{{ it.title }}</div>
+            <div class="bili-meta"><span class="bili-up">{{ it.up_name }}</span></div>
+          </div>
+        </div>
+        <div v-if="!history.length" class="empty-tip">无结果</div>
+      </el-tab-pane>
+      <el-tab-pane :label="'收藏（' + counts.favorites + '）'" name="favorites">
+        <div class="bili-grid">
+          <div class="bili-card" v-for="it in favorites" :key="it.bvid" @click="play(it)">
+            <div class="bili-cover">
+              <img :src="imgUrl(it.pic)" loading="lazy" decoding="async" :alt="it.title"/>
+            </div>
+            <div class="bili-title">{{ it.title }}</div>
+            <div class="bili-meta"><span class="bili-up">{{ it.up_name }}</span></div>
+          </div>
+        </div>
+        <div v-if="!favorites.length" class="empty-tip">无结果</div>
+      </el-tab-pane>
+      <el-tab-pane :label="'关注的UP主（' + counts.followings + '）'" name="followings">
+        <el-table :data="followings" style="width:100%">
+          <el-table-column prop="uname" label="UP主"/>
+          <el-table-column prop="mid" label="UID" width="200"/>
+        </el-table>
+        <div v-if="!followings.length" class="empty-tip">无结果</div>
+      </el-tab-pane>
+    </el-tabs>
+  `,
+  setup(props) {
+    const tab = ref('history');
+    const history = ref([]); const favorites = ref([]); const followings = ref([]);
+    const counts = Vue.computed(() => ({
+      history: history.value.length, favorites: favorites.value.length, followings: followings.value.length,
+    }));
+    function play(it) { if (it.bvid) window.open(`https://www.bilibili.com/video/${it.bvid}`, '_blank'); }
+    function fmtNum(n) { n = n || 0; return n >= 10000 ? (n / 10000).toFixed(1).replace(/\.0$/, '') + '万' : String(n); }
+    function fmtDur(s) {
+      s = s || 0; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+      const mm = String(m).padStart(2, '0'), ss = String(sec).padStart(2, '0');
+      return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+    }
+    async function load() {
+      const d = await api(`/search?q=${encodeURIComponent(props.q)}`).catch(() => ({ history: [], favorites: [], followings: [] }));
+      history.value = d.history; favorites.value = d.favorites; followings.value = d.followings;
+    }
+    onMounted(load);
+    return { tab, history, favorites, followings, counts, play, imgUrl, fmtNum, fmtDur };
+  },
+};
+
 const App = {
-  components: { Overview, ContentBrowser, Monitor, Analysis, Downloads, Chat, Settings },
+  components: { Overview, ContentBrowser, Monitor, Analysis, Downloads, SearchResult, Chat, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
         <div class="logo">BiliScope</div>
+        <div class="search-box">
+          <el-input v-model="searchQ" placeholder="搜索视频 / UP主" clearable @keyup.enter="doSearch">
+            <template #prefix><el-icon><Search/></el-icon></template>
+          </el-input>
+        </div>
         <el-menu :default-active="route" @select="route = $event" class="menu">
           <el-menu-item index="overview"><el-icon><DataLine/></el-icon>概览</el-menu-item>
           <el-menu-item index="content"><el-icon><FolderOpened/></el-icon>内容浏览</el-menu-item>
@@ -1152,6 +1273,7 @@ const App = {
         <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
         <Analysis v-else-if="route === 'analysis'"/>
         <Downloads v-else-if="route === 'downloads'"/>
+        <SearchResult v-else-if="route === 'search'" :q="searchQ"/>
         <Chat v-else-if="route === 'chat'"/>
         <Settings v-else-if="route === 'settings'" :status="status" @refresh="loadStatus"/>
       </el-main>
@@ -1161,6 +1283,12 @@ const App = {
     const route = ref('overview');
     const status = ref({ logged_in: false, counts: {} });
     const accountInfo = ref({ stats: null, coin_log: [] });
+    const searchQ = ref('');
+    function doSearch() {
+      const q = searchQ.value.trim();
+      if (!q) { ElementPlus.ElMessage.warning('请输入搜索内容'); return; }
+      route.value = 'search';
+    }
     const lvPct = Vue.computed(() => {
       const s = accountInfo.value.stats;
       if (!s || !s.current_min || !s.next_exp || s.next_exp <= s.current_min) return 0;
@@ -1171,7 +1299,7 @@ const App = {
       try { accountInfo.value = await api('/account'); } catch (e) {}
     }
     onMounted(loadStatus);
-    return { route, status, accountInfo, lvPct, loadStatus, imgUrl };
+    return { route, status, accountInfo, lvPct, loadStatus, imgUrl, searchQ, doSearch };
   },
 };
 

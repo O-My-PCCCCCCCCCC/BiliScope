@@ -146,6 +146,13 @@ CREATE TABLE IF NOT EXISTS dynamics (
     ctime INTEGER,
     updated_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS up_stats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mid INTEGER,
+    uname TEXT,
+    follower INTEGER,
+    checked_at INTEGER
+);
 """
 
 

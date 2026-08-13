@@ -190,6 +190,75 @@ def daily_calendar(conn: sqlite3.Connection, days: int = 90) -> list[dict]:
     ).fetchall()]
 
 
+def monthly_compare(conn: sqlite3.Connection) -> dict:
+    """本月 vs 上月观看对比。"""
+    now = int(time.time())
+    tm = time.localtime(now)
+    this_ym = time.strftime("%Y-%m", tm)
+    this_start = int(time.mktime((tm.tm_year, tm.tm_mon, 1, 0, 0, 0, 0, 0, -1)))
+    prev_end = this_start - 1
+    prev_start = int(time.mktime((tm.tm_year, tm.tm_mon - 1, 1, 0, 0, 0, 0, 0, -1)))
+    return {
+        "this": _month_stats(conn, this_start, now),
+        "last": _month_stats(conn, prev_start, prev_end),
+        "labels": {"this": this_ym, "last": time.strftime("%Y-%m", time.localtime(prev_start))},
+    }
+
+
+def _month_stats(conn, start, end):
+    views = conn.execute("SELECT COUNT(*) FROM history WHERE view_at >= ? AND view_at < ?", (start, end)).fetchone()[0]
+    days = conn.execute("SELECT COUNT(DISTINCT date(view_at,'unixepoch','localtime')) FROM history WHERE view_at >= ? AND view_at < ?", (start, end)).fetchone()[0]
+    top = [dict(r) for r in conn.execute(
+        """SELECT v.up_name, COUNT(*) AS n FROM history h JOIN videos v ON h.bvid=v.bvid
+           WHERE h.view_at >= ? AND h.view_at < ? AND v.up_name != ''
+           GROUP BY v.up_name ORDER BY n DESC LIMIT 3""", (start, end)).fetchall()]
+    return {"views": views, "days": days, "top_ups": top}
+
+
+def fav_growth(conn: sqlite3.Connection, months: int = 6) -> list[dict]:
+    """收藏夹增长趋势（按月）。"""
+    start = int(time.time()) - months * 30 * 86400
+    return [dict(r) for r in conn.execute(
+        """SELECT strftime('%Y-%m', fav_time, 'unixepoch', 'localtime') AS ym, COUNT(*) AS n
+           FROM fav_items WHERE fav_time >= ?
+           GROUP BY ym ORDER BY ym""", (start,)).fetchall()]
+
+
+def collect_up_followers(conn: sqlite3.Connection, client, limit: int = 20) -> int:
+    """采集常看 UP 主的粉丝数快照，返回新增条数。"""
+    rows = conn.execute(
+        """SELECT v.up_mid, v.up_name, COUNT(*) AS n FROM history h
+           JOIN videos v ON h.bvid = v.bvid
+           WHERE v.up_mid > 0 GROUP BY v.up_mid, v.up_name ORDER BY n DESC LIMIT ?""",
+        (limit,)).fetchall()
+    n = 0
+    for r in rows:
+        try:
+            stat = client.get_json("/x/relation/stat", {"vmid": r["up_mid"]})
+            follower = (stat.get("data") or {}).get("follower", 0)
+            conn.execute(
+                "INSERT INTO up_stats (mid, uname, follower, checked_at) VALUES (?, ?, ?, ?)",
+                (r["up_mid"], r["up_name"], follower, int(time.time())))
+            n += 1
+        except Exception:
+            continue
+    conn.commit()
+    return n
+
+
+def up_follower_trend(conn: sqlite3.Connection, limit: int = 10) -> list[dict]:
+    """常看 UP 主粉丝数趋势（最近快照）。"""
+    mids = [r[0] for r in conn.execute(
+        "SELECT DISTINCT mid FROM up_stats ORDER BY checked_at DESC LIMIT ?", (limit,)).fetchall()]
+    out = []
+    for mid in mids:
+        snap = [dict(r) for r in conn.execute(
+            "SELECT uname, follower, checked_at FROM up_stats WHERE mid = ? ORDER BY checked_at", (mid,)).fetchall()]
+        if snap:
+            out.append({"mid": mid, "uname": snap[-1]["uname"], "points": snap})
+    return out
+
+
 def aggregate_themes(conn: sqlite3.Connection, limit: int = 20) -> list[dict]:
     rows = conn.execute("SELECT tags_json FROM video_analysis").fetchall()
     counter: dict[str, int] = {}
