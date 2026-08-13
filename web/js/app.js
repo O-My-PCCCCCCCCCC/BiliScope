@@ -1404,10 +1404,10 @@ const App = {
         </div>
         <el-menu :default-active="route" @select="route = $event" class="menu">
           <el-menu-item index="overview"><el-icon><DataLine/></el-icon>概览</el-menu-item>
+          <el-menu-item index="insights"><el-icon><TrendCharts/></el-icon>洞察</el-menu-item>
           <el-menu-item index="content"><el-icon><FolderOpened/></el-icon>内容浏览</el-menu-item>
           <el-menu-item index="monitor"><el-icon><Bell/></el-icon>监测中心<el-badge :value="status.alerts_unread || 0" :hidden="!(status.alerts_unread)" class="menu-badge"/></el-menu-item>
           <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>内容分析</el-menu-item>
-          <el-menu-item index="insights"><el-icon><TrendCharts/></el-icon>洞察</el-menu-item>
           <el-menu-item index="downloads"><el-icon><Download/></el-icon>下载管理</el-menu-item>
           <el-menu-item index="chat"><el-icon><ChatDotRound/></el-icon>AI 助手</el-menu-item>
           <el-menu-item index="settings"><el-icon><Setting/></el-icon>设置</el-menu-item>
