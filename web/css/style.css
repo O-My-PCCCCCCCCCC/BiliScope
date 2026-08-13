@@ -18,6 +18,7 @@ body { background: #141414; color: #e5e5e5; font-family: 'Microsoft YaHei', sans
 .weekly-report { line-height: 1.8; white-space: pre-wrap; color: #e5e5e5; font-size: 14px; }
 .card-num { font-size: 30px; font-weight: 700; color: #fb7299; text-align: center; }
 .card-label { color: #999; margin-top: 6px; text-align: center; font-size: 13px; }
+.card-sub { color: #666; margin-top: 3px; text-align: center; font-size: 11px; }
 .chart { height: 280px; }
 .charts .el-card { margin-bottom: 16px; }
 .fav-name { font-size: 16px; font-weight: 600; }

@@ -62,3 +62,36 @@ def test_graveyard_stats_endpoint():
 
     body = client.get("/api/analysis/graveyard-stats").json()
     assert body == {"graveyard": 2, "total": 2, "pct": 100.0}
+
+
+def test_overview_report():
+    import time
+    conn = database.get_conn()
+    conn.execute("INSERT INTO videos (bvid, title, up_name, duration) VALUES ('BV1', 'A', 'UP甲', 100)")
+    conn.execute("INSERT INTO history (bvid, view_at, progress) VALUES ('BV1', ?, 50)", (int(time.time()),))
+    conn.execute("INSERT INTO video_analysis (bvid, tags_json, summary, category) VALUES ('BV1', '[\"音乐\"]', 's', '娱乐消遣')")
+    conn.commit()
+    conn.close()
+
+    body = client.get("/api/analysis/overview-report").json()
+    for key in ("profile", "graveyard", "repeat", "streak", "night", "invest", "interest"):
+        assert key in body
+    assert body["profile"]["total_views"] == 1
+
+
+def test_ai_report_requires_llm(tmp_path):
+    config.set_config_path(tmp_path / "config.json")
+    config.save_config({**config.load_config(),
+                        "llm": {"provider": "", "api_key": "", "base_url": "", "model": ""}})
+    assert client.post("/api/analysis/ai-report").status_code == 400
+
+
+def test_ai_report_generates(monkeypatch):
+    import app.api as api_mod
+    config.save_config({**config.load_config(),
+                        "llm": {"provider": "openai", "api_key": "k", "base_url": "", "model": ""}})
+    monkeypatch.setattr(api_mod, "generate_ai_report",
+                        lambda conn, llm_client: {"narrative": "叙事", "findings": [{"title": "t", "detail": "d"}]})
+    r = client.post("/api/analysis/ai-report")
+    assert r.status_code == 200
+    assert r.json()["narrative"] == "叙事"

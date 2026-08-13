@@ -19,10 +19,12 @@ from app.config import get_cookies, load_config, save_config
 from app.database import get_conn, init_db
 from app.hardware import detect_hardware, recommend_models, recommend_ollama_model
 from app.llm import get_llm_client
+from app.insights.ai_report import generate_ai_report
 from app.insights.cross_time import time_content_cross
 from app.insights.interest import interest_drift
 from app.insights.persona import generate_persona
 from app.insights.time_invest import time_invest
+from app.insights.watching import night_owl_stats, repeat_watches, streak_stats
 from app.monitor import monitor_status as monitor_status_fn
 from app.monitor import start_monitor
 from app.report import generate_report
@@ -284,6 +286,43 @@ def analysis_run(limit: int = Query(50, ge=1, le=200), force: bool = False) -> d
 @router.get("/analysis/run-status")
 def analysis_run_status() -> dict:
     return analysis_status_fn()
+
+
+@router.get("/analysis/overview-report")
+def analysis_overview_report() -> dict:
+    """统一分析页的全部数据一次拉齐。"""
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return {
+            "profile": watch_profile(conn),
+            "invest": time_invest(conn),
+            "category": category_distribution(conn)["distribution"],
+            "interest": interest_drift(conn),
+            "cross": time_content_cross(conn),
+            "graveyard": graveyard_stats(conn),
+            "repeat": repeat_watches(conn),
+            "streak": streak_stats(conn),
+            "night": night_owl_stats(conn),
+            "up_depth": up_depth(conn, 10),
+            "themes": aggregate_themes(conn, 10),
+        }
+    finally:
+        conn.close()
+
+
+@router.post("/analysis/ai-report")
+def analysis_ai_report() -> dict:
+    """生成 AI 综合分析报告（画像叙事 + 关键发现）。"""
+    llm_cfg = load_config().get("llm") or {}
+    if not llm_cfg.get("provider"):
+        raise HTTPException(status_code=400, detail="未配置 LLM，请先在设置中选择")
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return generate_ai_report(conn, get_llm_client(llm_cfg))
+    finally:
+        conn.close()
 
 
 @router.post("/analysis/reclassify")

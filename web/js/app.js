@@ -414,56 +414,215 @@ const Chat = {
 
 const Analysis = {
   template: `
-    <h2>内容分析</h2>
-    <div style="margin-bottom:12px">
+    <h2>分析</h2>
+
+    <el-card style="margin-bottom:16px">
+      <template #header>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span>🤖 AI 分析报告</span>
+          <el-button type="primary" size="small" @click="genAiReport" :loading="aiLoading">生成分析报告</el-button>
+        </div>
+      </template>
+      <div v-if="aiReport.narrative" class="weekly-report">{{ aiReport.narrative }}</div>
+      <div v-else style="color:#999;font-size:13px">用 AI 把全部观看数据汇总成你的 B 站画像 + 关键发现。需先在设置页配置 LLM（DeepSeek / Ollama）。</div>
+      <div v-for="f in aiReport.findings" :key="f.title" style="margin-top:10px">
+        <el-tag size="small" type="warning" effect="plain">🔍 {{ f.title }}</el-tag>
+        <div style="color:#bbb;font-size:13px;margin-top:4px;line-height:1.6">{{ f.detail }}</div>
+      </div>
+    </el-card>
+
+    <el-row :gutter="12" class="cards" style="margin-bottom:16px">
+      <el-col :span="4" v-for="k in coreCards" :key="k.label">
+        <el-card><div class="card-num">{{ k.value }}</div><div class="card-label">{{ k.label }}</div><div class="card-sub">{{ k.sub }}</div></el-card>
+      </el-col>
+    </el-row>
+
+    <el-card style="margin-bottom:16px">
+      <template #header>⏱️ 时间花在哪</template>
+      <div v-if="investTip" style="color:#e6a23c;font-size:13px;margin-bottom:10px">{{ investTip }}</div>
+      <el-row :gutter="12">
+        <el-col :span="12"><div data-inv-cat class="chart"></div></el-col>
+        <el-col :span="12"><div data-inv-up class="chart"></div></el-col>
+      </el-row>
+    </el-card>
+
+    <el-card style="margin-bottom:16px">
+      <template #header>🧭 兴趣怎么变（近 12 个月）</template>
+      <div v-if="!interest.series.length" class="empty-tip">还没有主题数据，请先到下方「分析管理」分析视频</div>
+      <div v-else data-interest class="chart"></div>
+    </el-card>
+
+    <el-card style="margin-bottom:16px">
+      <template #header>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span>🌙 什么时候看</span>
+          <el-radio-group v-model="crossDim" size="small" @change="renderCross">
+            <el-radio-button value="tname">分区</el-radio-button>
+            <el-radio-button value="category">用途</el-radio-button>
+          </el-radio-group>
+        </div>
+      </template>
+      <div data-cross class="chart"></div>
+      <div v-if="night.night_ratio !== undefined" style="margin-top:8px;color:#888;font-size:13px">
+        🦉 深夜(0-6)占比 <b style="color:#fb7299">{{ night.night_ratio }}%</b>（{{ night.night_level }}）· 工作日占比 {{ night.weekday_ratio }}%
+      </div>
+    </el-card>
+
+    <el-card style="margin-bottom:16px">
+      <template #header>📁 收藏行为</template>
+      <div v-if="graveyard.total" style="color:#e6a23c;font-size:14px;margin-bottom:8px">
+        吃灰率 <b style="color:#fb7299">{{ graveyard.pct }}%</b>（{{ graveyard.graveyard }}/{{ graveyard.total }} 个收藏从没看过，建议清理）
+      </div>
+      <el-table :data="graveyardItems" size="small" max-height="320" style="width:100%">
+        <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip/>
+        <el-table-column prop="up_name" label="UP主" width="120" show-overflow-tooltip/>
+        <el-table-column prop="tname" label="分区" width="90"/>
+      </el-table>
+      <div v-if="!graveyardItems.length" class="empty-tip">没有吃灰收藏 🎉</div>
+    </el-card>
+
+    <el-card style="margin-bottom:16px">
+      <template #header>🔁 重复观看 · 沉迷视频 TOP</template>
+      <el-table :data="repeat" size="small" max-height="300" style="width:100%">
+        <el-table-column prop="title" label="标题" min-width="240" show-overflow-tooltip/>
+        <el-table-column prop="up_name" label="UP主" width="120"/>
+        <el-table-column label="看了几遍" width="90"><template #default="s">{{ s.row.views }} 遍</template></el-table-column>
+        <el-table-column label="累计时长" width="110"><template #default="s">{{ (s.row.total_sec / 3600).toFixed(1) }} 小时</template></el-table-column>
+      </el-table>
+      <div v-if="!repeat.length" class="empty-tip">没有重复观看的视频</div>
+    </el-card>
+
+    <el-card style="margin-bottom:16px">
+      <template #header>📅 活跃周期（近 90 天）</template>
+      <div v-if="streak.active_days" style="color:#999;font-size:13px;margin-bottom:8px">
+        最长连续观看 <b style="color:#fb7299">{{ streak.longest_streak }} 天</b> · 活跃 {{ streak.active_days }} 天
+      </div>
+      <div data-calendar class="chart" style="height:150px"></div>
+    </el-card>
+
+    <el-card>
+      <template #header>分析管理</template>
+      <div v-if="!status.total" style="color:#e6a23c;font-size:12px;margin-bottom:10px">
+        ⚠️ 还没有可分析的视频：请先在设置页配置 LLM，再同步一次数据
+      </div>
       <el-button type="primary" @click="run" :loading="running">分析未分析视频</el-button>
       <el-button @click="rerunAll" :loading="running" style="margin-left:8px">重新分析全部（花少量额度）</el-button>
       <el-tag style="margin-left:8px">已分析 {{ status.analyzed }} / {{ status.total }}</el-tag>
-    </div>
-    <div v-if="runState.state === 'running'" style="margin-bottom:12px">
-      <el-progress :percentage="runState.progress"/>
-      <div style="color:#999;font-size:12px;margin-top:4px">{{ runState.message }}<span v-if="runState.total">（共 {{ runState.total }} 个）</span></div>
-    </div>
-    <div v-if="!status.total" style="color:#e6a23c;font-size:12px;margin-bottom:12px">
-      ⚠️ 还没有可分析的视频：请先在设置页配置 LLM（Ollama/DeepSeek），再同步一次数据（同步时会补拉视频简介）
-    </div>
-    <el-card>
-      <template #header>观看内容主题分布</template>
-      <div data-theme-chart class="chart"></div>
+      <div v-if="runState.state === 'running'" style="margin-top:10px">
+        <el-progress :percentage="runState.progress"/>
+        <div style="color:#999;font-size:12px;margin-top:4px">{{ runState.message }}<span v-if="runState.total">（共 {{ runState.total }} 个）</span></div>
+      </div>
     </el-card>
-    <el-row :gutter="12" style="margin-top:16px">
-      <el-col :span="7"><el-card><div data-category class="chart"></div></el-card></el-col>
-      <el-col :span="17"><el-card>
-        <template #header>
-          <el-radio-group v-model="catTab" size="small">
-            <el-radio-button value="useful">有用（学习/实用/资讯）</el-radio-button>
-            <el-radio-button value="waste">娱乐消遣</el-radio-button>
-          </el-radio-group>
-        </template>
-        <el-table :data="catTab === 'useful' ? catData.useful : catData.waste" size="small" max-height="300" style="width:100%">
-          <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip/>
-          <el-table-column prop="category" label="类别" width="90"/>
-          <el-table-column prop="summary" label="摘要" min-width="180" show-overflow-tooltip/>
-        </el-table>
-        <div v-if="!((catTab === 'useful' ? catData.useful : catData.waste).length)" class="empty-tip">还没有分类数据，先点「分析未分析视频」</div>
-      </el-card></el-col>
-    </el-row>
   `,
   setup() {
+    const profile = ref({});
+    const invest = ref({ by_category: [], by_tag: [], by_up: [] });
+    const interest = ref({ months: [], series: [] });
+    const cross = ref({ buckets: [], categories: [], matrix: [] });
+    const crossDim = ref('tname');
+    const graveyard = ref({ graveyard: 0, total: 0, pct: 0 });
+    const graveyardItems = ref([]);
+    const repeat = ref([]);
+    const streak = ref({ longest_streak: 0, active_days: 0, calendar: [] });
+    const night = ref({ night_ratio: undefined, weekday_ratio: 0, night_level: '' });
+    const upDepth = ref([]);
+    const aiReport = ref({ narrative: '', findings: [] });
+    const aiLoading = ref(false);
     const running = ref(false); const status = ref({ analyzed: 0, total: 0 });
     const runState = ref({ state: 'idle', progress: 0, message: '', total: 0 });
-    const catData = ref({ distribution: [], useful: [], waste: [] });
-    const catTab = ref('useful');
     let runTimer = null;
-    async function loadCategory() {
-      catData.value = await api('/analysis/category').catch(() => ({ distribution: [], useful: [], waste: [] }));
-      nextTick(() => {
-        const el = document.querySelector('[data-category]');
-        if (el) echarts.init(el, 'dark').setOption(pieOption(
-          '用途占比', catData.value.distribution.map(x => ({ name: x.category, value: x.n }))
-        ));
+
+    function mk(sel, option) {
+      const el = document.querySelector(sel);
+      if (el) echarts.init(el, 'dark').setOption(option);
+    }
+    const barOpt = (title, list, color) => ({
+      title: { text: title, textStyle: { fontSize: 13 } },
+      tooltip: { trigger: 'axis', confine: true, formatter: p => `${p[0].name}<br/>${(p[0].value / 3600).toFixed(1)} 小时` },
+      grid: { left: 90, right: 30, top: 30 },
+      xAxis: { type: 'value' },
+      yAxis: { type: 'category', data: list.slice(0, 8).map(x => x.name).reverse(), axisLabel: { fontSize: 10 } },
+      series: [{ type: 'bar', data: list.slice(0, 8).map(x => x.seconds).reverse(),
+                 itemStyle: { color: color || '#7ecbf2' }, barMaxWidth: 12 }],
+    });
+    const coreCards = Vue.computed(() => {
+      const p = profile.value; const st = streak.value; const n = night.value; const g = graveyard.value;
+      return [
+        { label: '总时长', value: (p.total_duration_h ?? 0) + ' 小时', sub: '累计观看 ' + (p.total_views ?? 0) + ' 次' },
+        { label: '活跃天数', value: p.active_days ?? '-', sub: '日均 ' + (p.avg_daily ?? '-') + ' 个' },
+        { label: '黄金时段', value: p.peak_hour ?? '-', sub: '最活跃 ' + (p.peak_weekday ?? '') },
+        { label: '最长连续', value: (st.longest_streak ?? 0) + ' 天', sub: '近 90 天活跃 ' + (st.active_days ?? 0) + ' 天' },
+        { label: '深夜占比', value: (n.night_ratio ?? 0) + '%', sub: n.night_level || '作息' },
+        { label: '收藏吃灰率', value: (g.pct ?? 0) + '%', sub: (g.graveyard ?? 0) + '/' + (g.total ?? 0) + ' 没看过' },
+      ];
+    });
+    const investTip = Vue.computed(() => {
+      const cat = invest.value.by_category || [];
+      if (!cat.length) return '';
+      const top = cat[0];
+      return `⏱️ 你的时间大头在「${top.name}」——${(top.seconds / 3600).toFixed(1)} 小时`;
+    });
+
+    async function genAiReport() {
+      aiLoading.value = true;
+      try {
+        aiReport.value = await api('/analysis/ai-report', { method: 'POST' });
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+      finally { aiLoading.value = false; }
+    }
+
+    function renderAll() {
+      mk('[data-inv-cat]', barOpt('按用途', invest.value.by_category, '#fb7299'));
+      mk('[data-inv-up]', barOpt('按UP主', invest.value.by_up));
+      const d = cross.value;
+      mk('[data-cross]', {
+        title: { text: crossDim.value === 'tname' ? '时段 × 分区' : '时段 × 用途', textStyle: { fontSize: 14 } },
+        tooltip: { position: 'top' },
+        grid: { left: 90, right: 30, top: 40 },
+        xAxis: { type: 'category', data: d.buckets, splitArea: { show: true } },
+        yAxis: { type: 'category', data: d.categories, splitArea: { show: true } },
+        visualMap: { min: 0, max: Math.max(1, ...d.matrix.flat()), inRange: { color: ['#2a2a2a', '#fb7299'] } },
+        series: [{ type: 'heatmap',
+                   data: d.buckets.flatMap((b, bi) => d.categories.map((c, ci) => [bi, ci, d.matrix[bi]?.[ci] || 0])) }],
+      });
+      if (interest.value.series.length) {
+        mk('[data-interest]', {
+          title: { text: '兴趣漂移', textStyle: { fontSize: 14 } },
+          tooltip: { trigger: 'axis', confine: true },
+          legend: { type: 'scroll', textStyle: { color: '#999', fontSize: 10 }, top: 0 },
+          xAxis: { type: 'category', data: interest.value.months },
+          yAxis: { type: 'value' },
+          series: interest.value.series.map(s => ({ name: s.tag, type: 'line', stack: 'all', smooth: true, areaStyle: {}, data: s.data })),
+        });
+      }
+      const cal = streak.value.calendar || [];
+      if (cal.length) {
+        mk('[data-calendar]', {
+          tooltip: {},
+          calendar: { range: 90, cellSize: ['auto', 14], left: 30, right: 20, top: 10 },
+          visualMap: { min: 0, max: 5, inRange: { color: ['#2a2a2a', '#fb7299'] },
+                       orient: 'horizontal', left: 'center', bottom: 0, text: ['多', '少'] },
+          series: [{ type: 'heatmap', coordinateSystem: 'calendar', data: cal.map(x => [x.day, x.n]) }],
+        });
+      }
+    }
+    function renderCross() {
+      const d = cross.value;
+      const el = document.querySelector('[data-cross]');
+      if (!el) return;
+      const chart = echarts.getInstanceByDom(el) || echarts.init(el, 'dark');
+      chart.setOption({
+        title: { text: crossDim.value === 'tname' ? '时段 × 分区' : '时段 × 用途', textStyle: { fontSize: 14 } },
+        tooltip: { position: 'top' },
+        grid: { left: 90, right: 30, top: 40 },
+        xAxis: { type: 'category', data: d.buckets, splitArea: { show: true } },
+        yAxis: { type: 'category', data: d.categories, splitArea: { show: true } },
+        visualMap: { min: 0, max: Math.max(1, ...d.matrix.flat()), inRange: { color: ['#2a2a2a', '#fb7299'] } },
+        series: [{ type: 'heatmap',
+                   data: d.buckets.flatMap((b, bi) => d.categories.map((c, ci) => [bi, ci, d.matrix[bi]?.[ci] || 0])) }],
       });
     }
+
     async function pollRunStatus() {
       try { runState.value = await api('/analysis/run-status'); } catch (e) {}
       const s = runState.value.state;
@@ -471,9 +630,7 @@ const Analysis = {
         if (runTimer) { clearInterval(runTimer); runTimer = null; }
         running.value = false;
         ElementPlus.ElMessage.success(runState.value.message || '分析完成');
-        await loadStatus();
-        renderChart();
-        await loadCategory();
+        await loadAll();
       } else if (s === 'error') {
         if (runTimer) { clearInterval(runTimer); runTimer = null; }
         running.value = false;
@@ -505,23 +662,20 @@ const Analysis = {
     async function loadStatus() {
       try { status.value = await api('/analysis/status'); } catch (e) {}
     }
-    async function renderChart() {
-      const themes = await api('/analysis/themes').catch(() => []);
-      nextTick(() => {
-        const el = document.querySelector('[data-theme-chart]');
-        if (!el) return;
-        const chart = echarts.init(el, 'dark');
-        chart.setOption({
-          title: { text: '主题标签 TOP', textStyle: { fontSize: 14 } },
-          tooltip: {},
-          xAxis: { type: 'category', data: themes.map(t => t.tag), axisLabel: { rotate: 30 } },
-          yAxis: { type: 'value' },
-          series: [{ type: 'bar', data: themes.map(t => t.n) }],
-        });
-      });
+    async function loadAll() {
+      const d = await api('/analysis/overview-report').catch(() => null);
+      if (d) {
+        profile.value = d.profile; invest.value = d.invest; interest.value = d.interest;
+        cross.value = d.cross; graveyard.value = d.graveyard; repeat.value = d.repeat;
+        streak.value = d.streak; night.value = d.night; upDepth.value = d.up_depth;
+      }
+      graveyardItems.value = await api('/analysis/graveyard-list').catch(() => []);
+      await loadStatus();
+      nextTick(renderAll);
     }
-    onMounted(() => { loadStatus(); renderChart(); loadCategory(); });
-    return { running, status, runState, run, rerunAll, catData, catTab, loadCategory };
+    onMounted(loadAll);
+    return { coreCards, investTip, aiReport, aiLoading, genAiReport, interest, cross, crossDim, renderCross,
+             night, graveyard, graveyardItems, repeat, streak, status, runState, run, rerunAll, running };
   },
 };
 
@@ -1567,7 +1721,7 @@ const SearchResult = {
 };
 
 const App = {
-  components: { Overview, ContentBrowser, Monitor, Analysis, Insights, Downloads, SearchResult, Chat, Settings },
+  components: { Overview, ContentBrowser, Monitor, Analysis, Downloads, SearchResult, Chat, Settings },
   template: `
     <el-container class="layout">
       <el-aside width="220px" class="aside">
@@ -1579,10 +1733,9 @@ const App = {
         </div>
         <el-menu :default-active="route" @select="route = $event" class="menu">
           <el-menu-item index="overview"><el-icon><DataLine/></el-icon>概览</el-menu-item>
-          <el-menu-item index="insights"><el-icon><TrendCharts/></el-icon>洞察</el-menu-item>
+          <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>分析</el-menu-item>
           <el-menu-item index="content"><el-icon><FolderOpened/></el-icon>内容浏览</el-menu-item>
           <el-menu-item index="monitor"><el-icon><Bell/></el-icon>监测中心<el-badge :value="status.alerts_unread || 0" :hidden="!(status.alerts_unread)" class="menu-badge"/></el-menu-item>
-          <el-menu-item index="analysis"><el-icon><DataAnalysis/></el-icon>内容分析</el-menu-item>
           <el-menu-item index="downloads"><el-icon><Download/></el-icon>下载管理</el-menu-item>
           <el-menu-item index="chat"><el-icon><ChatDotRound/></el-icon>AI 助手</el-menu-item>
           <el-menu-item index="settings"><el-icon><Setting/></el-icon>设置</el-menu-item>
@@ -1609,7 +1762,6 @@ const App = {
         <ContentBrowser v-else-if="route === 'content'"/>
         <Monitor v-else-if="route === 'monitor'" :status="status" @refresh="loadStatus"/>
         <Analysis v-else-if="route === 'analysis'"/>
-        <Insights v-else-if="route === 'insights'"/>
         <Downloads v-else-if="route === 'downloads'"/>
         <SearchResult v-else-if="route === 'search'" :q="searchQ"/>
         <Chat v-else-if="route === 'chat'"/>
