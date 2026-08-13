@@ -433,6 +433,14 @@ const Insights = {
   template: `
     <h2>洞察</h2>
     <el-card style="margin-bottom:16px">
+      <template #header>AI 观看画像</template>
+      <el-button type="primary" @click="genPersona" :loading="personaLoading">生成我的观看画像</el-button>
+      <div v-if="persona" class="weekly-report" style="margin-top:12px">{{ persona }}</div>
+      <div v-else style="color:#999;font-size:12px;margin-top:8px">
+        用 AI 根据你的全部观看数据，描绘你的 B 站观看人格（深夜党 / 碎片党 / 深度爱好者…）。需先在设置页配置 LLM。
+      </div>
+    </el-card>
+    <el-card style="margin-bottom:16px">
       <template #header>兴趣漂移（近 12 个月主题标签）</template>
       <div v-if="!interest.series.length" class="empty-tip">还没有主题数据，请先到「内容分析」页点「分析未分析视频」</div>
       <div v-else data-interest class="chart"></div>
@@ -461,6 +469,16 @@ const Insights = {
   setup() {
     const interest = ref({ months: [], series: [] });
     const crossDim = ref('tname');
+    const persona = ref('');
+    const personaLoading = ref(false);
+    async function genPersona() {
+      personaLoading.value = true;
+      try {
+        const r = await api('/insights/persona', { method: 'POST' });
+        persona.value = r.persona;
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+      finally { personaLoading.value = false; }
+    }
     function mk(sel, option) {
       const el = document.querySelector(sel);
       if (el) echarts.init(el, 'dark').setOption(option);
@@ -511,7 +529,7 @@ const Insights = {
       });
     }
     onMounted(() => { loadInterest(); loadCross(); loadInvest(); });
-    return { interest, crossDim, loadCross };
+    return { interest, crossDim, loadCross, persona, personaLoading, genPersona };
   },
 };
 
