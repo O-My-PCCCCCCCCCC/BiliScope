@@ -365,9 +365,37 @@ const Analysis = {
       <template #header>观看内容主题分布</template>
       <div data-theme-chart class="chart"></div>
     </el-card>
+    <el-row :gutter="12" style="margin-top:16px">
+      <el-col :span="7"><el-card><div data-category class="chart"></div></el-card></el-col>
+      <el-col :span="17"><el-card>
+        <template #header>
+          <el-radio-group v-model="catTab" size="small">
+            <el-radio-button value="useful">有用（学习/实用/资讯）</el-radio-button>
+            <el-radio-button value="waste">娱乐消遣</el-radio-button>
+          </el-radio-group>
+        </template>
+        <el-table :data="catTab === 'useful' ? catData.useful : catData.waste" size="small" max-height="300" style="width:100%">
+          <el-table-column prop="title" label="标题" min-width="200"/>
+          <el-table-column prop="category" label="类别" width="90"/>
+          <el-table-column prop="summary" label="摘要" min-width="180"/>
+        </el-table>
+        <div v-if="!((catTab === 'useful' ? catData.useful : catData.waste).length)" class="empty-tip">还没有分类数据，先点「分析未分析视频」</div>
+      </el-card></el-col>
+    </el-row>
   `,
   setup() {
     const running = ref(false); const status = ref({ analyzed: 0, total: 0 });
+    const catData = ref({ distribution: [], useful: [], waste: [] });
+    const catTab = ref('useful');
+    async function loadCategory() {
+      catData.value = await api('/analysis/category').catch(() => ({ distribution: [], useful: [], waste: [] }));
+      nextTick(() => {
+        const el = document.querySelector('[data-category]');
+        if (el) echarts.init(el, 'dark').setOption(pieOption(
+          '用途占比', catData.value.distribution.map(x => ({ name: x.category, value: x.n }))
+        ));
+      });
+    }
     async function run() {
       running.value = true;
       try {
@@ -396,8 +424,8 @@ const Analysis = {
         });
       });
     }
-    onMounted(() => { loadStatus(); renderChart(); });
-    return { running, status, run };
+    onMounted(() => { loadStatus(); renderChart(); loadCategory(); });
+    return { running, status, run, catData, catTab, loadCategory };
   },
 };
 

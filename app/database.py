@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS video_analysis (
     bvid TEXT PRIMARY KEY,
     tags_json TEXT,
     summary TEXT,
+    category TEXT,
     analyzed_at INTEGER,
     model TEXT
 );
@@ -184,6 +185,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "view_count" not in cols:
         conn.execute("ALTER TABLE videos ADD COLUMN view_count INTEGER")
         conn.execute("ALTER TABLE videos ADD COLUMN danmaku INTEGER")
+    vacols = {r[1] for r in conn.execute("PRAGMA table_info(video_analysis)")}
+    if vacols and "category" not in vacols:
+        conn.execute("ALTER TABLE video_analysis ADD COLUMN category TEXT")
     acols = {r[1] for r in conn.execute("PRAGMA table_info(account_stats)")}
     if acols and "bangumi" not in acols:
         conn.execute("ALTER TABLE account_stats ADD COLUMN bangumi INTEGER")

@@ -31,7 +31,7 @@ class OllamaClient(LLMClient):
             resp = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=120)
         content = resp.json()["message"]["content"]
         data = json.loads(content)
-        return VideoTags(tags=data["tags"], summary=data["summary"])
+        return VideoTags(tags=data["tags"], summary=data["summary"], category=data.get("category", "其他"))
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ChatResult:
         """走 Ollama 的 OpenAI 兼容端点 /v1/chat/completions。"""

@@ -10,10 +10,11 @@ from app.llm.base import LLMClient
 
 def analyze_unanalyzed(conn: sqlite3.Connection, llm_client: LLMClient,
                        limit: int = 50) -> int:
+    # 未分析过、或已分析但缺 category（老数据）的都重新分析
     rows = conn.execute(
         """SELECT bvid, title, desc FROM videos
            WHERE desc IS NOT NULL AND desc != ''
-             AND bvid NOT IN (SELECT bvid FROM video_analysis)
+             AND bvid NOT IN (SELECT bvid FROM video_analysis WHERE category IS NOT NULL)
            LIMIT ?""",
         (limit,),
     ).fetchall()
@@ -23,15 +24,37 @@ def analyze_unanalyzed(conn: sqlite3.Connection, llm_client: LLMClient,
         try:
             result = llm_client.analyze_video(row["title"], row["desc"])
             conn.execute(
-                "INSERT OR REPLACE INTO video_analysis (bvid, tags_json, summary, analyzed_at, model) VALUES (?, ?, ?, ?, ?)",
+                """INSERT OR REPLACE INTO video_analysis
+                   (bvid, tags_json, summary, category, analyzed_at, model) VALUES (?, ?, ?, ?, ?, ?)""",
                 (row["bvid"], json.dumps(result.tags, ensure_ascii=False), result.summary,
-                 int(time.time()), model),
+                 result.category, int(time.time()), model),
             )
             n += 1
         except Exception:
             continue
     conn.commit()
     return n
+
+
+def category_distribution(conn: sqlite3.Connection) -> dict:
+    """视频用途类别占比 + 明细。"""
+    dist = [dict(r) for r in conn.execute(
+        """SELECT COALESCE(category, '其他') AS category, COUNT(*) AS n
+           FROM video_analysis GROUP BY category ORDER BY n DESC"""
+    ).fetchall()]
+    useful = [dict(r) for r in conn.execute(
+        """SELECT va.bvid, v.title, v.up_name, va.category, va.summary
+           FROM video_analysis va JOIN videos v ON va.bvid = v.bvid
+           WHERE va.category IN ('学习提升', '生活实用', '资讯')
+           ORDER BY va.analyzed_at DESC LIMIT 50"""
+    ).fetchall()]
+    waste = [dict(r) for r in conn.execute(
+        """SELECT va.bvid, v.title, v.up_name, va.category, va.summary
+           FROM video_analysis va JOIN videos v ON va.bvid = v.bvid
+           WHERE va.category = '娱乐消遣'
+           ORDER BY va.analyzed_at DESC LIMIT 50"""
+    ).fetchall()]
+    return {"distribution": dist, "useful": useful, "waste": waste}
 
 
 def analysis_stats(conn: sqlite3.Connection) -> dict:

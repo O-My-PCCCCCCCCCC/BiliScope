@@ -21,11 +21,11 @@ class OpenAIClient(LLMClient):
             response_format={"type": "json_object"},
             messages=[{"role": "user", "content":
                        PROMPT.format(title=title, desc=desc) +
-                       '\n请以 JSON 返回 {"tags": ["标签1","标签2"], "summary": "一句话总结"}。'}],
+                       '\n请以 JSON 返回 {"tags": ["标签1","标签2"], "summary": "一句话总结", "category": "学习提升/娱乐消遣/资讯/生活实用/其他"}。'}],
         )
         text = resp.choices[0].message.content
         data = json.loads(text)
-        return VideoTags(tags=data["tags"], summary=data["summary"])
+        return VideoTags(tags=data["tags"], summary=data["summary"], category=data.get("category", "其他"))
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ChatResult:
         kw: dict = {"model": self.model, "messages": messages}

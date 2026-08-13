@@ -7,9 +7,9 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from app.analyze import (aggregate_themes, analysis_stats, analyze_unanalyzed,
-                         collect_up_followers, daily_calendar, fav_growth, fav_tnames,
-                         graveyard_by_tname, graveyard_list, monthly_compare, monthly_trend,
-                         popularity, time_buckets, up_depth, up_follower_trend,
+                         category_distribution, collect_up_followers, daily_calendar, fav_growth,
+                         fav_tnames, graveyard_by_tname, graveyard_list, monthly_compare,
+                         monthly_trend, popularity, time_buckets, up_depth, up_follower_trend,
                          watch_completion, watch_profile, weekday_weekend)
 from app.bilibili import login as login_mod
 from app.bilibili.client import BiliError, UA
@@ -392,6 +392,16 @@ def analysis_graveyard_list() -> list:
     init_db(conn)
     try:
         return graveyard_list(conn)
+    finally:
+        conn.close()
+
+
+@router.get("/analysis/category")
+def analysis_category() -> dict:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return category_distribution(conn)
     finally:
         conn.close()
 
