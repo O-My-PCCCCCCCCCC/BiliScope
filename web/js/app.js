@@ -1,5 +1,17 @@
 const { createApp, ref, onMounted, onBeforeUnmount, nextTick } = Vue;
 
+// ECharts 实例注册表：窗口/侧边栏缩放时统一 resize，避免图表溢出或内容被遮挡
+const _chartInstances = new Set();
+const _origInit = echarts.init.bind(echarts);
+echarts.init = (el, ...rest) => {
+  const inst = _origInit(el, ...rest);
+  _chartInstances.add(inst);
+  return inst;
+};
+window.addEventListener('resize', () => {
+  _chartInstances.forEach(c => { try { c.resize(); } catch (e) {} });
+});
+
 async function api(path, options = {}) {
   const res = await fetch('/api' + path, options);
   const data = await res.json().catch(() => ({}));
@@ -42,7 +54,7 @@ const Dynamics = {
       <el-table-column label="类型" width="90">
         <template #default="s"><el-tag size="small">{{ typeName(s.row.type) }}</el-tag></template>
       </el-table-column>
-      <el-table-column prop="content" label="内容" min-width="300"/>
+      <el-table-column prop="content" label="内容" min-width="300" show-overflow-tooltip/>
       <el-table-column prop="like_count" label="点赞" width="70"/>
       <el-table-column prop="comment_count" label="评论" width="70"/>
       <el-table-column prop="repost_count" label="转发" width="70"/>
@@ -81,7 +93,7 @@ const DeepAnalysis = {
     <el-card style="margin-top:16px">
       <template #header>UP主深度榜（观看时长 TOP）</template>
       <el-table :data="upDepth" size="small" max-height="300" style="width:100%">
-        <el-table-column prop="up_name" label="UP主" width="140"/>
+        <el-table-column prop="up_name" label="UP主" width="140" show-overflow-tooltip/>
         <el-table-column prop="views" label="观看次数" width="90"/>
         <el-table-column label="总时长" width="100">
           <template #default="s">{{ (s.row.total_sec / 3600).toFixed(1) }} 小时</template>
@@ -383,9 +395,9 @@ const Analysis = {
           </el-radio-group>
         </template>
         <el-table :data="catTab === 'useful' ? catData.useful : catData.waste" size="small" max-height="300" style="width:100%">
-          <el-table-column prop="title" label="标题" min-width="200"/>
+          <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip/>
           <el-table-column prop="category" label="类别" width="90"/>
-          <el-table-column prop="summary" label="摘要" min-width="180"/>
+          <el-table-column prop="summary" label="摘要" min-width="180" show-overflow-tooltip/>
         </el-table>
         <div v-if="!((catTab === 'useful' ? catData.useful : catData.waste).length)" class="empty-tip">还没有分类数据，先点「分析未分析视频」</div>
       </el-card></el-col>
@@ -614,13 +626,13 @@ const Overview = {
         <el-tabs v-model="catTab">
           <el-tab-pane :label="'有用 ' + catData.useful.length" name="useful">
             <el-table :data="catData.useful" size="small" max-height="280" style="width:100%">
-              <el-table-column prop="title" label="标题" min-width="220"/>
+              <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip/>
               <el-table-column prop="category" label="类别" width="90"/>
             </el-table>
           </el-tab-pane>
           <el-tab-pane :label="'娱乐 ' + catData.waste.length" name="waste">
             <el-table :data="catData.waste" size="small" max-height="280" style="width:100%">
-              <el-table-column prop="title" label="标题" min-width="220"/>
+              <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip/>
               <el-table-column prop="category" label="类别" width="90"/>
             </el-table>
           </el-tab-pane>
@@ -631,7 +643,7 @@ const Overview = {
     <el-collapse style="margin-top:16px">
       <el-collapse-item title="UP主深度榜（观看时长 TOP）" name="up">
         <el-table :data="upDepth" size="small" style="width:100%">
-          <el-table-column prop="up_name" label="UP主" width="160"/>
+          <el-table-column prop="up_name" label="UP主" width="160" show-overflow-tooltip/>
           <el-table-column prop="views" label="观看次数" width="100"/>
           <el-table-column label="总时长" width="120">
             <template #default="s">{{ (s.row.total_sec / 3600).toFixed(1) }} 小时</template>
@@ -643,8 +655,8 @@ const Overview = {
       </el-collapse-item>
       <el-collapse-item :title="'吃灰收藏明细（' + (graveyardStats.value.total ? graveyardStats.value.graveyard : graveyardItems.length) + ' 个）'" name="gy">
         <el-table :data="graveyardItems" size="small" max-height="360" style="width:100%">
-          <el-table-column prop="title" label="标题" min-width="240"/>
-          <el-table-column prop="up_name" label="UP主" width="120"/>
+          <el-table-column prop="title" label="标题" min-width="240" show-overflow-tooltip/>
+          <el-table-column prop="up_name" label="UP主" width="120" show-overflow-tooltip/>
           <el-table-column prop="tname" label="分区" width="90"/>
           <el-table-column label="收藏时间" width="150">
             <template #default="s">{{ fmt(s.row.fav_time) }}</template>
@@ -802,8 +814,8 @@ const Monitor = {
     <el-tabs v-model="tab">
       <el-tab-pane label="提醒" name="alerts">
         <el-table :data="alerts" style="width:100%">
-          <el-table-column prop="title" label="标题" min-width="160"/>
-          <el-table-column prop="content" label="内容" min-width="260"/>
+          <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip/>
+          <el-table-column prop="content" label="内容" min-width="260" show-overflow-tooltip/>
           <el-table-column label="时间" width="180">
             <template #default="s">{{ fmt(s.row.created_at) }}</template>
           </el-table-column>
