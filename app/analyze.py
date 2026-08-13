@@ -5,11 +5,16 @@ import json
 import sqlite3
 import time
 
+from app.categorize import reclassify_others
 from app.llm.base import LLMClient
 
 
 def analyze_unanalyzed(conn: sqlite3.Connection, llm_client: LLMClient,
-                       limit: int = 50) -> int:
+                       limit: int = 50, force: bool = False) -> int:
+    reclassify_others(conn)  # 先用分区规则兜底，避免重复扣费
+    if force:
+        conn.execute("DELETE FROM video_analysis")
+        conn.commit()
     # 未分析过、或已分析但缺 category（老数据）的都重新分析
     rows = conn.execute(
         """SELECT bvid, title, desc FROM videos

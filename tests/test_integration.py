@@ -110,7 +110,7 @@ def test_analysis_chain(monkeypatch):
     config.save_cookies({"SESSDATA": "abc"})
     config.save_config({**config.load_config(),
                         "llm": {"provider": "ollama", "api_key": "", "base_url": "", "model": "qwen2.5:7b"}})
-    monkeypatch.setattr(api_mod, "analyze_unanalyzed", lambda conn, llm_client, limit=50: 2)
+    monkeypatch.setattr(api_mod, "analyze_unanalyzed", lambda conn, llm_client, limit=50, force=False: 2)
 
     r = client.post("/api/analysis/run", params={"limit": 10})
     assert r.status_code == 200

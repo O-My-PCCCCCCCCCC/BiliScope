@@ -363,6 +363,7 @@ const Analysis = {
     <h2>内容分析</h2>
     <div style="margin-bottom:12px">
       <el-button type="primary" @click="run" :loading="running">分析未分析视频</el-button>
+      <el-button @click="rerunAll" :loading="running" style="margin-left:8px">重新分析全部（花少量额度）</el-button>
       <el-tag style="margin-left:8px">已分析 {{ status.analyzed }} / {{ status.total }}</el-tag>
     </div>
     <div v-if="!status.total" style="color:#e6a23c;font-size:12px;margin-bottom:12px">
@@ -410,6 +411,23 @@ const Analysis = {
         ElementPlus.ElMessage.success(`分析完成：${r.analyzed} 条`);
         await loadStatus();
         renderChart();
+        await loadCategory();
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+      finally { running.value = false; }
+    }
+    async function rerunAll() {
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          '将清空已有分析结果并按新规则重新分析全部视频（会消耗少量 LLM 额度）。确定继续？',
+          '重新分析全部', { type: 'warning' });
+      } catch (e) { return; }  // 用户取消
+      running.value = true;
+      try {
+        const r = await api('/analysis/run?limit=200&force=1', { method: 'POST' });
+        ElementPlus.ElMessage.success(`重新分析完成：${r.analyzed} 条`);
+        await loadStatus();
+        renderChart();
+        await loadCategory();
       } catch (e) { ElementPlus.ElMessage.error(e.message); }
       finally { running.value = false; }
     }
@@ -432,7 +450,7 @@ const Analysis = {
       });
     }
     onMounted(() => { loadStatus(); renderChart(); loadCategory(); });
-    return { running, status, run, catData, catTab, loadCategory };
+    return { running, status, run, rerunAll, catData, catTab, loadCategory };
   },
 };
 

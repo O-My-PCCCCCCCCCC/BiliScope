@@ -273,7 +273,7 @@ def config_test_email() -> dict:
 
 
 @router.post("/analysis/run")
-def analysis_run(limit: int = Query(50, ge=1, le=200)) -> dict:
+def analysis_run(limit: int = Query(50, ge=1, le=200), force: bool = False) -> dict:
     if not get_cookies():
         raise HTTPException(status_code=401, detail="未登录，请先扫码登录")
     llm_cfg = load_config().get("llm") or {}
@@ -282,10 +282,22 @@ def analysis_run(limit: int = Query(50, ge=1, le=200)) -> dict:
     conn = get_conn()
     init_db(conn)
     try:
-        n = analyze_unanalyzed(conn, get_llm_client(llm_cfg), limit=limit)
+        n = analyze_unanalyzed(conn, get_llm_client(llm_cfg), limit=limit, force=force)
     finally:
         conn.close()
     return {"analyzed": n}
+
+
+@router.post("/analysis/reclassify")
+def analysis_reclassify() -> dict:
+    """用分区规则把 category='其他' 且能命中规则的本地重分类（不调 LLM）。"""
+    from app.categorize import reclassify_others
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return {"reclassified": reclassify_others(conn)}
+    finally:
+        conn.close()
 
 
 @router.get("/analysis/compare")
