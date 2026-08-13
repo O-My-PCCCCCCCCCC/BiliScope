@@ -19,6 +19,7 @@ from app.hardware import detect_hardware, recommend_models, recommend_ollama_mod
 from app.llm import get_llm_client
 from app.insights.cross_time import time_content_cross
 from app.insights.interest import interest_drift
+from app.insights.persona import generate_persona
 from app.insights.time_invest import time_invest
 from app.monitor import check_invalid, check_updates
 from app.report import generate_report
@@ -457,6 +458,19 @@ def insights_invest() -> dict:
     init_db(conn)
     try:
         return time_invest(conn)
+    finally:
+        conn.close()
+
+
+@router.post("/insights/persona")
+def insights_persona() -> dict:
+    llm_cfg = load_config().get("llm") or {}
+    if not llm_cfg.get("provider"):
+        raise HTTPException(status_code=400, detail="未配置 LLM，请先在设置中选择")
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return generate_persona(conn, get_llm_client(llm_cfg))
     finally:
         conn.close()
 
