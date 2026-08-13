@@ -85,8 +85,8 @@ const DeepAnalysis = {
       </el-col>
     </el-row>
     <el-row :gutter="16">
-      <el-col :span="12"><el-card><div data-monthly class="chart"></div></el-card></el-col>
-      <el-col :span="12"><el-card><div data-favTname class="chart"></div></el-card></el-col>
+      <el-col :xs="24" :md="12"><el-card><div data-monthly class="chart"></div></el-card></el-col>
+      <el-col :xs="24" :md="12"><el-card><div data-favTname class="chart"></div></el-card></el-col>
       <el-col :span="8"><el-card><div data-dur class="chart"></div></el-card></el-col>
       <el-col :span="8"><el-card><div data-week class="chart"></div></el-card></el-col>
       <el-col :span="8"><el-card><div data-up class="chart"></div></el-card></el-col>
@@ -441,10 +441,10 @@ const Analysis = {
     </el-card>
 
     <el-row :gutter="12" class="cards" style="margin-bottom:16px">
-      <el-col :span="3" v-for="k in coreCards" :key="k.label">
+      <el-col :xs="12" :sm="6" :md="3" v-for="k in coreCards" :key="k.label">
         <el-card><div class="card-num" style="font-size:22px">{{ k.value }}</div><div class="card-label">{{ k.label }}</div><div class="card-sub">{{ k.sub }}</div></el-card>
       </el-col>
-      <el-col :span="6"><el-card>
+      <el-col :xs="24" :sm="12" :md="6"><el-card>
         <div class="card-num" style="font-size:22px">{{ compare.this?.views ?? '-' }}<span style="font-size:13px;color:#666"> / 上月 {{ compare.last?.views ?? '-' }}</span></div>
         <div class="card-label">本月观看</div>
         <div class="card-sub">活跃 {{ compare.this?.days ?? '-' }} 天 · 新增收藏 {{ favGrowthLast }}</div>
@@ -452,13 +452,13 @@ const Analysis = {
     </el-row>
 
     <el-row :gutter="16" style="margin-bottom:16px">
-      <el-col :span="12"><el-card>
+      <el-col :xs="24" :md="12"><el-card>
         <template #header>⏱️ 时间花在哪</template>
         <div v-if="investTip" style="color:#e6a23c;font-size:13px;margin-bottom:6px">{{ investTip }}</div>
         <div data-inv-cat class="chart" style="height:150px"></div>
         <div data-inv-up class="chart" style="height:150px"></div>
       </el-card></el-col>
-      <el-col :span="12"><el-card>
+      <el-col :xs="24" :md="12"><el-card>
         <template #header>🧭 兴趣怎么变（近 12 个月）</template>
         <div v-if="!interest.series.length" class="empty-tip">还没主题数据，先分析视频</div>
         <div v-else data-interest class="chart" style="height:320px"></div>
@@ -466,7 +466,7 @@ const Analysis = {
     </el-row>
 
     <el-row :gutter="16" style="margin-bottom:16px">
-      <el-col :span="12"><el-card>
+      <el-col :xs="24" :md="12"><el-card>
         <template #header>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <span>🌙 什么时候看</span>
@@ -481,7 +481,7 @@ const Analysis = {
           🦉 深夜 {{ night.night_ratio }}%（{{ night.night_level }}）· 工作日 {{ night.weekday_ratio }}%
         </div>
       </el-card></el-col>
-      <el-col :span="12"><el-card>
+      <el-col :xs="24" :md="12"><el-card>
         <template #header>📅 活跃日历（90 天）</template>
         <div v-if="streak.active_days" style="color:#999;font-size:13px;margin-bottom:6px">
           最长连续 <b style="color:#fb7299">{{ streak.longest_streak }} 天</b> · 活跃 {{ streak.active_days }} 天
@@ -491,7 +491,7 @@ const Analysis = {
     </el-row>
 
     <el-row :gutter="16" style="margin-bottom:16px">
-      <el-col :span="12"><el-card>
+      <el-col :xs="24" :md="12"><el-card>
         <template #header>📁 收藏与重复</template>
         <el-tabs v-model="gyTab" size="small">
           <el-tab-pane :label="'吃灰 ' + graveyard.pct + '%'" name="gy">
@@ -511,7 +511,7 @@ const Analysis = {
           </el-tab-pane>
         </el-tabs>
       </el-card></el-col>
-      <el-col :span="12"><el-card>
+      <el-col :xs="24" :md="12"><el-card>
         <template #header>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <span>👤 UP主 & 趋势</span>
@@ -519,8 +519,8 @@ const Analysis = {
           </div>
         </template>
         <el-row :gutter="8">
-          <el-col :span="12"><div data-monthly class="chart" style="height:160px"></div></el-col>
-          <el-col :span="12"><div data-topup class="chart" style="height:160px"></div></el-col>
+          <el-col :xs="24" :md="12"><div data-monthly class="chart" style="height:160px"></div></el-col>
+          <el-col :xs="24" :md="12"><div data-topup class="chart" style="height:160px"></div></el-col>
         </el-row>
         <el-table :data="upFollowers" size="small" max-height="150" style="width:100%">
           <el-table-column prop="uname" label="UP主" show-overflow-tooltip/>
@@ -919,8 +919,8 @@ const Overview = {
       <el-col :span="8"><el-card><div class="card-num">{{ favGrowthLast }}</div><div class="card-label">本月新增收藏</div></el-card></el-col>
     </el-row>
     <el-row :gutter="12" class="charts">
-      <el-col :span="12"><el-card><div data-favgrowth class="chart"></div></el-card></el-col>
-      <el-col :span="12"><el-card>
+      <el-col :xs="24" :md="12"><el-card><div data-favgrowth class="chart"></div></el-card></el-col>
+      <el-col :xs="24" :md="12"><el-card>
         <template #header>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <span>UP主粉丝数（快照）</span>
