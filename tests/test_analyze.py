@@ -88,3 +88,51 @@ def test_graveyard_stats_empty(tmp_path):
     stats = __import__("app.analyze", fromlist=["graveyard_stats"]).graveyard_stats(conn)
     assert stats == {"graveyard": 0, "total": 0, "pct": 0}
     conn.close()
+
+
+def test_analyze_unanalyzed_reports_progress(tmp_path):
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    conn.execute("INSERT INTO videos (bvid, title, desc) VALUES ('BV1', 'A', '简介1')")
+    conn.execute("INSERT INTO videos (bvid, title, desc) VALUES ('BV2', 'B', '简介2')")
+    conn.commit()
+
+    progress = {}
+    n = analyze_unanalyzed(conn, FakeLLM(), limit=10, progress=progress)
+    assert n == 2
+    assert progress["total"] == 2
+    assert progress["progress"] >= 0
+    assert "分析" in progress["message"]
+    conn.close()
+
+
+def test_start_analysis_background_flow(monkeypatch):
+    import time
+
+    import app.analyze as analyze_mod
+    import app.config as cfg
+    import app.database as db
+    import app.llm as llm
+
+    monkeypatch.setattr(analyze_mod, "analyze_unanalyzed",
+                        lambda conn, llm_client, limit=50, force=False, progress=None: 3)
+
+    class FakeConn:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(db, "get_conn", lambda: FakeConn())
+    monkeypatch.setattr(db, "init_db", lambda conn: None)
+    monkeypatch.setattr(llm, "get_llm_client", lambda c: object())
+    monkeypatch.setattr(cfg, "load_config", lambda: {"llm": {"provider": "x"}})
+
+    assert analyze_mod.start_analysis() == {"ok": True}
+    st = {}
+    for _ in range(100):
+        st = analyze_mod.analysis_status()
+        if st["state"] in ("done", "error"):
+            break
+        time.sleep(0.05)
+    assert st["state"] == "done"
+    assert st["result"] == {"analyzed": 3}

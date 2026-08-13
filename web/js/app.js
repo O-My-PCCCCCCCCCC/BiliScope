@@ -420,6 +420,10 @@ const Analysis = {
       <el-button @click="rerunAll" :loading="running" style="margin-left:8px">重新分析全部（花少量额度）</el-button>
       <el-tag style="margin-left:8px">已分析 {{ status.analyzed }} / {{ status.total }}</el-tag>
     </div>
+    <div v-if="runState.state === 'running'" style="margin-bottom:12px">
+      <el-progress :percentage="runState.progress"/>
+      <div style="color:#999;font-size:12px;margin-top:4px">{{ runState.message }}<span v-if="runState.total">（共 {{ runState.total }} 个）</span></div>
+    </div>
     <div v-if="!status.total" style="color:#e6a23c;font-size:12px;margin-bottom:12px">
       ⚠️ 还没有可分析的视频：请先在设置页配置 LLM（Ollama/DeepSeek），再同步一次数据（同步时会补拉视频简介）
     </div>
@@ -447,8 +451,10 @@ const Analysis = {
   `,
   setup() {
     const running = ref(false); const status = ref({ analyzed: 0, total: 0 });
+    const runState = ref({ state: 'idle', progress: 0, message: '', total: 0 });
     const catData = ref({ distribution: [], useful: [], waste: [] });
     const catTab = ref('useful');
+    let runTimer = null;
     async function loadCategory() {
       catData.value = await api('/analysis/category').catch(() => ({ distribution: [], useful: [], waste: [] }));
       nextTick(() => {
@@ -458,33 +464,44 @@ const Analysis = {
         ));
       });
     }
-    async function run() {
-      running.value = true;
-      try {
-        const r = await api('/analysis/run?limit=50', { method: 'POST' });
-        ElementPlus.ElMessage.success(`分析完成：${r.analyzed} 条`);
+    async function pollRunStatus() {
+      try { runState.value = await api('/analysis/run-status'); } catch (e) {}
+      const s = runState.value.state;
+      if (s === 'done') {
+        if (runTimer) { clearInterval(runTimer); runTimer = null; }
+        running.value = false;
+        ElementPlus.ElMessage.success(runState.value.message || '分析完成');
         await loadStatus();
         renderChart();
         await loadCategory();
-      } catch (e) { ElementPlus.ElMessage.error(e.message); }
-      finally { running.value = false; }
+      } else if (s === 'error') {
+        if (runTimer) { clearInterval(runTimer); runTimer = null; }
+        running.value = false;
+        ElementPlus.ElMessage.error('分析失败：' + (runState.value.message || '未知错误'));
+      }
     }
+    async function startRun(force) {
+      if (running.value) return;
+      running.value = true;
+      runState.value = { state: 'running', progress: 0, message: '启动中...', total: 0 };
+      try {
+        await api(`/analysis/run?limit=${force ? 200 : 50}&force=${force ? 1 : 0}`, { method: 'POST' });
+        runTimer = setInterval(pollRunStatus, 1500);
+      } catch (e) {
+        ElementPlus.ElMessage.error(e.message);
+        running.value = false;
+      }
+    }
+    function run() { startRun(false); }
     async function rerunAll() {
       try {
         await ElementPlus.ElMessageBox.confirm(
           '将清空已有分析结果并按新规则重新分析全部视频（会消耗少量 LLM 额度）。确定继续？',
           '重新分析全部', { type: 'warning' });
       } catch (e) { return; }  // 用户取消
-      running.value = true;
-      try {
-        const r = await api('/analysis/run?limit=200&force=1', { method: 'POST' });
-        ElementPlus.ElMessage.success(`重新分析完成：${r.analyzed} 条`);
-        await loadStatus();
-        renderChart();
-        await loadCategory();
-      } catch (e) { ElementPlus.ElMessage.error(e.message); }
-      finally { running.value = false; }
+      startRun(true);
     }
+    onBeforeUnmount(() => { if (runTimer) clearInterval(runTimer); });
     async function loadStatus() {
       try { status.value = await api('/analysis/status'); } catch (e) {}
     }
@@ -504,7 +521,7 @@ const Analysis = {
       });
     }
     onMounted(() => { loadStatus(); renderChart(); loadCategory(); });
-    return { running, status, run, rerunAll, catData, catTab, loadCategory };
+    return { running, status, runState, run, rerunAll, catData, catTab, loadCategory };
   },
 };
 

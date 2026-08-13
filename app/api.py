@@ -7,10 +7,12 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from app.analyze import (aggregate_themes, analysis_stats, analyze_unanalyzed,
+                         analysis_status as analysis_status_fn,
                          category_distribution, collect_up_followers, daily_calendar, fav_growth,
                          fav_tnames, graveyard_by_tname, graveyard_list, graveyard_stats,
-                         monthly_compare, monthly_trend, popularity, time_buckets, up_depth,
-                         up_follower_trend, watch_completion, watch_profile, weekday_weekend)
+                         monthly_compare, monthly_trend, popularity, start_analysis, time_buckets,
+                         up_depth, up_follower_trend, watch_completion, watch_profile,
+                         weekday_weekend)
 from app.bilibili import login as login_mod
 from app.bilibili.client import BiliError, UA
 from app.config import get_cookies, load_config, save_config
@@ -273,13 +275,15 @@ def analysis_run(limit: int = Query(50, ge=1, le=200), force: bool = False) -> d
     llm_cfg = load_config().get("llm") or {}
     if not llm_cfg.get("provider"):
         raise HTTPException(status_code=400, detail="未配置 LLM，请先在设置中选择")
-    conn = get_conn()
-    init_db(conn)
-    try:
-        n = analyze_unanalyzed(conn, get_llm_client(llm_cfg), limit=limit, force=force)
-    finally:
-        conn.close()
-    return {"analyzed": n}
+    result = start_analysis(limit, force)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return {"ok": True}
+
+
+@router.get("/analysis/run-status")
+def analysis_run_status() -> dict:
+    return analysis_status_fn()
 
 
 @router.post("/analysis/reclassify")

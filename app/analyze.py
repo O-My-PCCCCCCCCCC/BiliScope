@@ -3,14 +3,55 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import time
 
 from app.categorize import reclassify_others
 from app.llm.base import LLMClient
 
+_analysis_status: dict = {"state": "idle", "progress": 0, "current": "",
+                          "total": 0, "message": "", "result": None}
+_analysis_thread: threading.Thread | None = None
+
+
+def analysis_status() -> dict:
+    """分析任务的进度状态（后台运行，切窗口不影响）。"""
+    return dict(_analysis_status)
+
+
+def start_analysis(limit: int = 50, force: bool = False) -> dict:
+    """后台启动分析任务，立即返回。"""
+    global _analysis_thread
+    if _analysis_thread and _analysis_thread.is_alive():
+        return {"error": "已有分析任务进行中，请等待完成"}
+    _analysis_status.update({"state": "running", "progress": 0, "current": "",
+                             "total": 0, "message": "准备开始...", "result": None})
+    _analysis_thread = threading.Thread(target=_analysis_run, args=(limit, force), daemon=True)
+    _analysis_thread.start()
+    return {"ok": True}
+
+
+def _analysis_run(limit: int, force: bool) -> None:
+    from app.config import load_config
+    from app.database import get_conn, init_db
+    from app.llm import get_llm_client
+    conn = get_conn()
+    init_db(conn)
+    try:
+        llm_cfg = load_config().get("llm") or {}
+        n = analyze_unanalyzed(conn, get_llm_client(llm_cfg), limit=limit, force=force,
+                               progress=_analysis_status)
+        _analysis_status.update({"state": "done", "progress": 100,
+                                 "message": f"分析完成：{n} 条", "result": {"analyzed": n}})
+    except Exception as e:
+        _analysis_status.update({"state": "error", "message": str(e)})
+    finally:
+        conn.close()
+
 
 def analyze_unanalyzed(conn: sqlite3.Connection, llm_client: LLMClient,
-                       limit: int = 50, force: bool = False) -> int:
+                       limit: int = 50, force: bool = False,
+                       progress: dict | None = None) -> int:
     reclassify_others(conn)  # 先用分区规则兜底，避免重复扣费
     if force:
         conn.execute("DELETE FROM video_analysis")
@@ -23,9 +64,16 @@ def analyze_unanalyzed(conn: sqlite3.Connection, llm_client: LLMClient,
            LIMIT ?""",
         (limit,),
     ).fetchall()
+    total = len(rows)
+    if progress is not None:
+        progress["total"] = total
     n = 0
     model = getattr(llm_client, "model", "")
-    for row in rows:
+    for i, row in enumerate(rows):
+        if progress is not None:
+            progress["current"] = row["bvid"]
+            progress["progress"] = min(int(i * 100 / total), 99) if total else 0
+            progress["message"] = f"分析 {i + 1}/{total}"
         try:
             result = llm_client.analyze_video(row["title"], row["desc"])
             conn.execute(

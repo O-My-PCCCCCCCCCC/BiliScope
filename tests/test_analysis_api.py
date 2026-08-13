@@ -25,11 +25,15 @@ def test_run_and_themes(monkeypatch):
     config.save_cookies({"SESSDATA": "abc"})
     config.save_config({**config.load_config(),
                         "llm": {"provider": "ollama", "api_key": "", "base_url": "", "model": "qwen2.5:7b"}})
-    monkeypatch.setattr(api_mod, "analyze_unanalyzed", lambda conn, llm_client, limit=50, force=False: 3)
+    monkeypatch.setattr(api_mod, "start_analysis", lambda limit=50, force=False: {"ok": True})
+    monkeypatch.setattr(api_mod, "analysis_status_fn",
+                        lambda: {"state": "done", "result": {"analyzed": 3},
+                                 "progress": 100, "message": "分析完成：3 条", "total": 0, "current": ""})
 
     r = client.post("/api/analysis/run", params={"limit": 10})
     assert r.status_code == 200
-    assert r.json() == {"analyzed": 3}
+    assert r.json() == {"ok": True}
+    assert client.get("/api/analysis/run-status").json()["state"] == "done"
 
 
 def test_analysis_status_and_themes():
