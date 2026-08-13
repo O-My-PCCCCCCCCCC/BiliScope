@@ -17,6 +17,9 @@ from app.config import get_cookies, load_config, save_config
 from app.database import get_conn, init_db
 from app.hardware import detect_hardware, recommend_models, recommend_ollama_model
 from app.llm import get_llm_client
+from app.insights.cross_time import time_content_cross
+from app.insights.interest import interest_drift
+from app.insights.time_invest import time_invest
 from app.monitor import check_invalid, check_updates
 from app.report import generate_report
 from app.sync import run_full_sync
@@ -422,6 +425,38 @@ def analysis_status() -> dict:
     init_db(conn)
     try:
         return analysis_stats(conn)
+    finally:
+        conn.close()
+
+
+@router.get("/insights/interest")
+def insights_interest(months: int = Query(12, ge=1, le=36)) -> dict:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return interest_drift(conn, months=months)
+    finally:
+        conn.close()
+
+
+@router.get("/insights/cross")
+def insights_cross(dim: str = Query("tname")) -> dict:
+    if dim not in ("tname", "category"):
+        raise HTTPException(status_code=400, detail="dim 仅支持 tname / category")
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return time_content_cross(conn, dim=dim)
+    finally:
+        conn.close()
+
+
+@router.get("/insights/invest")
+def insights_invest() -> dict:
+    conn = get_conn()
+    init_db(conn)
+    try:
+        return time_invest(conn)
     finally:
         conn.close()
 
