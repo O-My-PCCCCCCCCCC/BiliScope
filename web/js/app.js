@@ -1989,7 +1989,7 @@ const App = {
     <el-container v-else class="layout">
       <div v-if="isMobile && menuOpen" class="menu-backdrop" @click="menuOpen = false"></div>
       <el-aside width="220px" class="aside" :class="{ open: isMobile && menuOpen }">
-        <div class="logo">BiliScope<span class="logo-ver">v1.1</span></div>
+        <div class="logo">BiliScope<span class="logo-ver">v1.2</span></div>
         <div class="search-box">
           <el-input v-model="searchQ" placeholder="搜索视频 / UP主" clearable @keyup.enter="doSearch">
             <template #prefix><el-icon><Search/></el-icon></template>

@@ -7,8 +7,8 @@ from PyInstaller.utils.win32.versioninfo import (
 
 version_info = VSVersionInfo(
     ffi=FixedFileInfo(
-        filevers=(1, 1, 0, 0),
-        prodvers=(1, 1, 0, 0),
+        filevers=(1, 2, 0, 0),
+        prodvers=(1, 2, 0, 0),
         mask=0x3f,
         flags=0x0,
         OS=0x40004,
@@ -21,11 +21,11 @@ version_info = VSVersionInfo(
             StringTable('080404b0', [
                 StringStruct('CompanyName', 'BiliScope'),
                 StringStruct('FileDescription', 'BiliScope - B站个人数据分析工具'),
-                StringStruct('FileVersion', '1.1.0.0'),
+                StringStruct('FileVersion', '1.2.0.0'),
                 StringStruct('InternalName', 'BiliScope'),
                 StringStruct('OriginalFilename', 'BiliScope.exe'),
                 StringStruct('ProductName', 'BiliScope'),
-                StringStruct('ProductVersion', '1.1.0.0'),
+                StringStruct('ProductVersion', '1.2.0.0'),
             ]),
         ]),
         VarFileInfo([VarStruct('Translation', [2052, 1200])]),

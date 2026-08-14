@@ -27,4 +27,4 @@ pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, a.binaries, a.datas, [],
           name='BiliScope', debug=False, bootloader_ignore_signals=False,
           strip=False, upx=True, console=True,
-          version=_vi.version_info)
+          version=_vi.version_info, icon='app_icon.ico')
