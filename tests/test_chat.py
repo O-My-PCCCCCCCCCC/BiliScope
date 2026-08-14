@@ -95,3 +95,46 @@ def test_anthropic_message_conversion():
     assert tool_user["role"] == "user"
     assert tool_user["content"][0]["type"] == "tool_result"
     assert tool_user["content"][0]["tool_use_id"] == "t1"
+
+
+def test_run_chat_stream_deltas():
+    from app.chat import reset_session, run_chat_stream
+    from app.llm.base import ChatResult
+    reset_session()
+
+    class FakeLLM:
+        def stream_chat(self, messages, tools=None):
+            yield {"type": "delta", "content": "你"}
+            yield {"type": "delta", "content": "好"}
+            yield {"type": "done", "result": ChatResult(text="你好", tool_calls=[])}
+
+    events = list(run_chat_stream(FakeLLM(), [], "hi"))
+    deltas = [e["content"] for e in events if e["type"] == "delta"]
+    assert "".join(deltas) == "你好"
+    assert events[-1]["type"] == "done"
+
+
+def test_run_chat_stream_tool_then_text():
+    from app.chat import execute_tool, reset_session, run_chat_stream
+    from app.llm.base import ChatResult, ToolCall
+    reset_session()
+
+    class FakeLLM:
+        def __init__(self):
+            self.calls = 0
+
+        def stream_chat(self, messages, tools=None):
+            self.calls += 1
+            if self.calls == 1:  # 第一轮：调用工具
+                yield {"type": "done", "result": ChatResult(
+                    text="", tool_calls=[ToolCall(id="c1", name="list_folders", arguments={})])}
+            else:  # 第二轮：输出文本
+                yield {"type": "delta", "content": "整理好了"}
+                yield {"type": "done", "result": ChatResult(text="整理好了", tool_calls=[])}
+
+    events = list(run_chat_stream(FakeLLM(), [], "整理收藏夹"))
+    types = [e["type"] for e in events]
+    assert "tool" in types
+    deltas = "".join(e["content"] for e in events if e["type"] == "delta")
+    assert "整理好了" in deltas
+    assert events[-1]["type"] == "done"

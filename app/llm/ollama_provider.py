@@ -53,3 +53,31 @@ class OllamaClient(LLMClient):
                 args = {}
             tool_calls.append(ToolCall(id=tc["id"], name=tc["function"]["name"], arguments=args))
         return ChatResult(text=msg.get("content") or "", tool_calls=tool_calls)
+
+    def stream_chat(self, messages: list[dict], tools: list[dict] | None = None):
+        """流式聊天（Ollama OpenAI 兼容端点 stream=true）。"""
+        payload: dict = {"model": self.model, "messages": messages, "stream": True}
+        if tools:
+            payload["tools"] = tools
+        url = f"{self.base_url}/v1/chat/completions"
+        client = self.client or httpx
+        with client.stream("POST", url, json=payload, timeout=180) as resp:
+            text_parts: list[str] = []
+            tool_calls: list[ToolCall] = []
+            for line in resp.iter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                data = json.loads(line[5:].strip())
+                if data.get("choices"):
+                    delta = data["choices"][0].get("delta") or {}
+                    if delta.get("content"):
+                        text_parts.append(delta["content"])
+                        yield {"type": "delta", "content": delta["content"]}
+                    for tc in delta.get("tool_calls") or []:
+                        try:
+                            args = json.loads(tc["function"].get("arguments") or "{}")
+                        except Exception:
+                            args = {}
+                        tool_calls.append(ToolCall(
+                            id=tc.get("id", ""), name=tc["function"]["name"], arguments=args))
+        yield {"type": "done", "result": ChatResult(text="".join(text_parts), tool_calls=tool_calls)}

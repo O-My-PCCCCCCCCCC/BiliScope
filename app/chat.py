@@ -117,6 +117,50 @@ def execute_tool(name: str, args: dict) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+def run_chat_stream(llm_client: LLMClient, history: list[dict], user_message: str,
+                    max_rounds: int = 6):
+    """流式聊天：yield SSE 事件（delta 文本逐段 / tool 工具调用 / done 结束）。"""
+    _persist("user", user_message)
+    messages = list(history) + [{"role": "user", "content": user_message}]
+    if not any(m.get("role") == "system" for m in messages):
+        messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+    tool_uses = []
+    stream_fn = getattr(llm_client, "stream_chat", None)
+    if stream_fn is None:
+        result = run_chat(llm_client, history, user_message, max_rounds)
+        yield {"type": "delta", "content": result["reply"]}
+        yield {"type": "done", "tool_uses": tool_uses}
+        return
+    for _ in range(max_rounds):
+        result = None
+        for evt in stream_fn(messages, TOOLS):
+            if evt["type"] == "delta":
+                yield {"type": "delta", "content": evt["content"]}
+            else:
+                result = evt["result"]
+        if result is None:
+            break
+        if not result.tool_calls:
+            messages.append({"role": "assistant", "content": result.text})
+            _persist("assistant", result.text)
+            yield {"type": "done", "tool_uses": tool_uses}
+            return
+        tc_list = [
+            {"id": tc.id, "type": "function",
+             "function": {"name": tc.name, "arguments": json.dumps(tc.arguments, ensure_ascii=False)}}
+            for tc in result.tool_calls
+        ]
+        messages.append({"role": "assistant", "content": result.text, "tool_calls": tc_list})
+        _persist("assistant", result.text, tool_calls=tc_list)
+        for tc in result.tool_calls:
+            output = execute_tool(tc.name, tc.arguments)
+            tool_uses.append({"tool": tc.name, "args": tc.arguments, "output": output})
+            messages.append({"role": "tool", "tool_call_id": tc.id, "content": output})
+            _persist("tool", output, tool_call_id=tc.id)
+            yield {"type": "tool", "tool": tc.name}
+    yield {"type": "done", "tool_uses": tool_uses}
+
+
 def run_chat(llm_client: LLMClient, history: list[dict], user_message: str,
              max_rounds: int = 6) -> dict:
     _persist("user", user_message)

@@ -40,3 +40,37 @@ class OpenAIClient(LLMClient):
                 arguments=json.loads(tc.function.arguments or "{}"),
             ))
         return ChatResult(text=msg.content or "", tool_calls=tool_calls)
+
+    def stream_chat(self, messages: list[dict], tools: list[dict] | None = None):
+        """流式聊天：逐段 yield {type:'delta',content}，最后 yield {type:'done',result:ChatResult}。"""
+        kw: dict = {"model": self.model, "messages": messages, "stream": True}
+        if tools:
+            kw["tools"] = tools
+        resp = self.client.chat.completions.create(**kw)
+        text_parts: list[str] = []
+        tool_deltas: dict[int, dict] = {}
+        for chunk in resp:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                text_parts.append(delta.content)
+                yield {"type": "delta", "content": delta.content}
+            if delta and delta.tool_calls:
+                for tc in delta.tool_calls:
+                    d = tool_deltas.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
+                    if tc.id:
+                        d["id"] = tc.id
+                    if tc.function and tc.function.name:
+                        d["name"] = tc.function.name
+                    if tc.function and tc.function.arguments:
+                        d["arguments"] += tc.function.arguments
+        tool_calls = []
+        for _, d in sorted(tool_deltas.items()):
+            if d["id"]:
+                try:
+                    args = json.loads(d["arguments"] or "{}")
+                except Exception:
+                    args = {}
+                tool_calls.append(ToolCall(id=d["id"], name=d["name"], arguments=args))
+        yield {"type": "done", "result": ChatResult(text="".join(text_parts), tool_calls=tool_calls)}

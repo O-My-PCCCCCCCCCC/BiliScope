@@ -396,17 +396,56 @@ const Chat = {
       loading.value = true;
       thinking.value = true;
       display.value.push({ role: 'user', text });  // 乐观显示，立即可见
+      const aid = display.value.length;  // 预留 assistant 占位
+      display.value.push({ role: 'assistant', text: '', html: '' });
       scrollToBottom();
+      let acc = '';
       try {
-        await api('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text }) });
-        await loadHistory();
+        const res = await fetch('/api/chat/stream', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text }),
+        });
+        if (!res.ok || !res.body) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `请求失败(${res.status})`);
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop();
+          for (const part of parts) {
+            const line = part.split('\n').find(l => l.startsWith('data: '));
+            if (!line) continue;
+            const data = JSON.parse(line.slice(6));
+            if (data.delta) {
+              if (thinking.value) { thinking.value = false; }  // 首个字到达，收掉"思考中"
+              acc += data.delta;
+              display.value[aid].text = acc;
+              display.value[aid].html = renderMd(acc);
+              scrollToBottom();
+            } else if (data.tool) {
+              display.value.push({ role: 'tool', text: '🔧 调用：' + data.tool });
+              scrollToBottom();
+            }
+          }
+        }
+        thinking.value = false;
+        if (!acc) {
+          display.value.splice(aid, 1);  // 空回复，移除占位
+        }
+        await loadHistory();  // 与后端存储对齐
       } catch (e) {
+        thinking.value = false;
         ElementPlus.ElMessage.error(e.message);
+        if (display.value[aid] && !display.value[aid].text) display.value.splice(aid, 1);
         display.value.push({ role: 'assistant', text: '⚠️ ' + e.message, html: renderMd('⚠️ ' + e.message) });
       } finally {
         loading.value = false;
-        thinking.value = false;
         scrollToBottom();
       }
     }

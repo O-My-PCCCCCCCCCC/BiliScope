@@ -4,6 +4,7 @@ from __future__ import annotations
 import time
 
 from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.analyze import (aggregate_themes, analysis_stats, analyze_unanalyzed,
@@ -723,6 +724,30 @@ def chat_post(payload: ChatPayload) -> dict:
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI 调用失败: {e}")
     return {"reply": result["reply"], "tool_uses": result["tool_uses"]}
+
+
+@router.post("/chat/stream")
+def chat_stream(payload: ChatPayload) -> StreamingResponse:
+    """流式聊天：SSE 逐段返回，工具调用时发 tool 事件。"""
+    if not get_cookies():
+        raise HTTPException(status_code=401, detail="未登录，请先扫码登录")
+    llm_cfg = load_config().get("llm") or {}
+    if not llm_cfg.get("provider"):
+        raise HTTPException(status_code=400, detail="未配置 LLM，请先在设置中选择")
+    import json as _json
+    from app import chat as chat_mod
+    client = get_llm_client(llm_cfg)
+    history = chat_mod.get_history()
+
+    def gen():
+        for evt in chat_mod.run_chat_stream(client, history, payload.message):
+            if evt["type"] == "delta":
+                yield f"data: {_json.dumps({'delta': evt['content']}, ensure_ascii=False)}\n\n"
+            elif evt["type"] == "tool":
+                yield f"data: {_json.dumps({'tool': evt['tool']}, ensure_ascii=False)}\n\n"
+            elif evt["type"] == "done":
+                yield f"data: {_json.dumps({'done': True}, ensure_ascii=False)}\n\n"
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 @router.get("/chat/history")

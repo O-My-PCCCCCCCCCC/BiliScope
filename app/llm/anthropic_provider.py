@@ -49,6 +49,48 @@ class AnthropicLLM(LLMClient):
         ]
         return ChatResult(text=text, tool_calls=tool_calls)
 
+    def stream_chat(self, messages: list[dict], tools: list[dict] | None = None):
+        """流式聊天：逐段 yield {type:'delta',content}，最后 yield {type:'done',result:ChatResult}。"""
+        api_tools = None
+        if tools:
+            api_tools = [
+                {"name": t["function"]["name"],
+                 "description": t["function"]["description"],
+                 "input_schema": t["function"]["parameters"]}
+                for t in tools
+            ]
+        system_parts = [m["content"] for m in messages if m["role"] == "system"]
+        api_messages = self._to_anthropic_messages(
+            [m for m in messages if m["role"] != "system"]
+        )
+        kw: dict = {"model": self.model, "max_tokens": 1024,
+                    "messages": api_messages, "stream": True}
+        if system_parts:
+            kw["system"] = "\n".join(system_parts)
+        if api_tools:
+            kw["tools"] = api_tools
+        text_parts: list[str] = []
+        tool_blocks: dict[int, dict] = {}
+        with self.client.messages.stream(**kw) as stream:
+            for event in stream:
+                if event.type == "content_block_delta" and event.delta.type == "text_delta":
+                    text_parts.append(event.delta.text)
+                    yield {"type": "delta", "content": event.delta.text}
+                elif event.type == "content_block_start" and getattr(event.content_block, "type", "") == "tool_use":
+                    cb = event.content_block
+                    tool_blocks[event.index] = {"id": cb.id, "name": cb.name, "input": ""}
+                elif event.type == "content_block_delta" and event.delta.type == "input_json_delta":
+                    if event.index in tool_blocks:
+                        tool_blocks[event.index]["input"] += event.delta.partial_json
+        tool_calls = []
+        for _, d in tool_blocks.items():
+            try:
+                args = json.loads(d["input"] or "{}")
+            except Exception:
+                args = {}
+            tool_calls.append(ToolCall(id=d["id"], name=d["name"], arguments=args))
+        yield {"type": "done", "result": ChatResult(text="".join(text_parts), tool_calls=tool_calls)}
+
     def _to_anthropic_messages(self, messages: list[dict]) -> list[dict]:
         """把 OpenAI 风格消息转成 Anthropic 格式。"""
         out: list[dict] = []
