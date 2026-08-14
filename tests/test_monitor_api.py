@@ -44,3 +44,7 @@ def test_invalid_and_updates_lists():
 
     updates = client.get("/api/monitor/updates").json()
     assert len(updates) == 1 and updates[0]["uname"] == "UP甲"
+
+
+def test_clean_invalid_requires_login():
+    assert client.post("/api/monitor/clean-invalid").status_code == 401

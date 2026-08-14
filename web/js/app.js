@@ -1154,6 +1154,12 @@ const Monitor = {
         </el-table>
       </el-tab-pane>
       <el-tab-pane label="失效视频" name="invalid">
+        <div v-if="invalidList.length" style="margin-bottom:10px;display:flex;align-items:center;gap:10px">
+          <el-button size="small" type="danger" plain @click="cleanInvalid" :loading="cleaning">
+            一键清理失效收藏（{{ invalidList.length }} 个）
+          </el-button>
+          <span style="color:#999;font-size:12px">从收藏夹移除失效视频，历史里的失效不会动</span>
+        </div>
         <el-table :data="invalidList" style="width:100%">
           <el-table-column prop="bvid" label="BV号" width="180"/>
           <el-table-column prop="source" label="来源" width="100"/>
@@ -1222,10 +1228,27 @@ const Monitor = {
       await loadAll();
       emit('refresh');
     }
+    const cleaning = ref(false);
+    async function cleanInvalid() {
+      if (!invalidList.value.length) return;
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          `将把 ${invalidList.value.length} 个失效视频从收藏夹移除（历史记录不受影响）。确定清理？`,
+          '清理失效收藏', { type: 'warning' });
+      } catch (e) { return; }
+      cleaning.value = true;
+      try {
+        const r = await api('/monitor/clean-invalid', { method: 'POST' });
+        ElementPlus.ElMessage.success(`已清理 ${r.removed} 个${r.failed ? `，失败 ${r.failed} 个` : ''}`);
+        await loadAll();
+        emit('refresh');
+      } catch (e) { ElementPlus.ElMessage.error(e.message); }
+      finally { cleaning.value = false; }
+    }
     onMounted(() => { loadAll().catch(() => {}); loadFolders(); });
     onBeforeUnmount(() => { if (monTimer) clearInterval(monTimer); });
     return { tab, alerts, invalidList, updates, running, monState, folders, selScope,
-             fmt, run, markRead };
+             fmt, run, markRead, cleanInvalid, cleaning };
   },
 };
 

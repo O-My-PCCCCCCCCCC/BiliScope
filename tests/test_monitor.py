@@ -121,3 +121,26 @@ def test_check_invalid_favorites_only(tmp_path, monkeypatch):
     assert n == 1
     assert called == ["BV-F"]  # 只查了收藏，没查历史 BV-H
     conn.close()
+
+
+def test_clean_invalid_favorites(tmp_path):
+    from app.monitor import clean_invalid_favorites
+    database.set_db_path(tmp_path / "t.db")
+    database.init_db()
+    conn = database.get_conn()
+    conn.execute("INSERT INTO fav_items (media_id, bvid) VALUES (101, 'BV1')")
+    conn.execute("INSERT INTO invalid_items (bvid, source, checked_at) VALUES ('BV1', 'check', 1)")
+    conn.commit()
+
+    calls = []
+    class FakeClient:
+        def post_json(self, path, data=None):
+            calls.append((path, data))
+            return {"code": 0}
+
+    result = clean_invalid_favorites(conn, FakeClient(), ["BV1"])
+    assert result == {"removed": 1, "failed": 0}
+    assert calls[0][0] == "/x/v3/fav/resource/del"
+    assert conn.execute("SELECT COUNT(*) FROM invalid_items").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM fav_items").fetchone()[0] == 0
+    conn.close()

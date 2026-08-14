@@ -162,6 +162,26 @@ def monitor_status() -> dict:
     return monitor_status_fn()
 
 
+@router.post("/monitor/clean-invalid")
+def monitor_clean_invalid() -> dict:
+    """一键把失效视频从收藏夹移除（含本地记录清理）。"""
+    if not get_cookies():
+        raise HTTPException(status_code=401, detail="未登录，请先扫码登录")
+    conn = get_conn()
+    init_db(conn)
+    try:
+        rows = conn.execute("SELECT bvid FROM invalid_items").fetchall()
+        bvids = [r["bvid"] for r in rows]
+        if not bvids:
+            return {"removed": 0, "failed": 0}
+        from app.bilibili.client import BiliClient
+        from app.monitor import clean_invalid_favorites
+        with BiliClient(cookies=get_cookies()) as client:
+            return clean_invalid_favorites(conn, client, bvids)
+    finally:
+        conn.close()
+
+
 @router.get("/monitor/invalid")
 def monitor_invalid() -> list:
     conn = get_conn()

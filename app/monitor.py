@@ -1,6 +1,7 @@
 """监测：视频失效检测、UP 主更新检测。后台线程 + 进度。"""
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 import time
@@ -162,3 +163,32 @@ def check_updates(conn: sqlite3.Connection, client: BiliClient,
         time.sleep(delay)
     conn.commit()
     return new_updates
+
+
+def clean_invalid_favorites(conn: sqlite3.Connection, client: BiliClient,
+                            bvids: list[str]) -> dict:
+    """把失效视频从收藏夹移除，并清理本地记录。返回 {removed, failed}。"""
+    removed = 0
+    failed = 0
+    for bvid in bvids:
+        folders = conn.execute(
+            "SELECT DISTINCT media_id FROM fav_items WHERE bvid = ?", (bvid,)
+        ).fetchall()
+        ok = True
+        for f in folders:
+            try:
+                client.post_json("/x/v3/fav/resource/del", {
+                    "media_id": f["media_id"],
+                    "resources": json.dumps([{"id": bvid, "type": 2}]),
+                })
+            except Exception:
+                ok = False
+            time.sleep(0.4)
+        if ok:
+            conn.execute("DELETE FROM invalid_items WHERE bvid = ?", (bvid,))
+            conn.execute("DELETE FROM fav_items WHERE bvid = ?", (bvid,))
+            removed += 1
+        else:
+            failed += 1
+    conn.commit()
+    return {"removed": removed, "failed": failed}
